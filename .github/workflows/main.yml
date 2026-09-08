@@ -1,0 +1,58 @@
+name: Spotify Takip Robotu
+
+on:
+  schedule:
+    # Off-hour minutes reduce scheduler contention; GitHub scheduling remains best effort.
+    - cron: "7,37 * * * *"
+    # Once a day, attempt a full rolling-window scan for offline plays that
+    # Spotify uploaded later with an older played_at timestamp.
+    - cron: "15 3 * * *"
+  workflow_dispatch:
+    inputs:
+      recovery:
+        description: "Run a full offline-play recovery scan"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: spotify-tracker
+  cancel-in-progress: false
+
+jobs:
+  run-tracker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Projeyi indir
+        uses: actions/checkout@v7
+
+      - name: Python kurulumu
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Kutuphaneleri yukle
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+
+      - name: Tracker tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Robotu calistir
+        env:
+          DB_URI: ${{ secrets.DB_URI }}
+          SPOTIPY_CLIENT_ID: ${{ secrets.SPOTIPY_CLIENT_ID }}
+          SPOTIPY_CLIENT_SECRET: ${{ secrets.SPOTIPY_CLIENT_SECRET }}
+          SPOTIPY_CACHE: ${{ secrets.SPOTIPY_CACHE }}
+          SPOTIPY_REDIRECT_URI: http://127.0.0.1:8888/callback
+          SPOTIFY_SYNC_LOOKBACK_DAYS: "7"
+          SPOTIFY_SYNC_MAX_PAGES: "20"
+          SPOTIFY_SYNC_OVERLAP_PAGES: "2"
+          SPOTIFY_SYNC_FORCE_RECOVERY: ${{ github.event.schedule == '15 3 * * *' || inputs.recovery }}
+        run: python tracker.py

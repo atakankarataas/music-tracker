@@ -1,0 +1,685 @@
+.detailPage {
+  gap: 20px;
+}
+
+.breadcrumbs {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--text-quaternary);
+  font-size: 11px;
+}
+
+.breadcrumbs a,
+.breadcrumbs span {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breadcrumbs a:hover {
+  color: var(--text-primary);
+}
+
+.breadcrumbs span:last-child {
+  color: var(--text-secondary);
+}
+
+.hero {
+  min-height: 236px;
+  display: flex;
+  align-items: end;
+  gap: 32px;
+  padding: 8px 0 20px;
+}
+
+.heroArtwork {
+  width: 176px;
+  height: 176px;
+  flex: 0 0 auto;
+}
+
+.heroArtwork :global(.artwork) {
+  width: 100% !important;
+  height: 100% !important;
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.24);
+}
+
+.heroArtwork :global(.artwork.round) {
+  border-radius: 50%;
+}
+
+.heroCopy {
+  min-width: 0;
+  padding-bottom: 3px;
+}
+
+.heroCopy h1 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: clamp(36px, 5vw, 56px);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.036em;
+}
+
+.heroLinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 11px 0 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.heroLinks a:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.heroLinks span {
+  color: var(--text-quaternary);
+}
+
+.heroMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 17px;
+  margin-top: 22px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.heroMeta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.periods {
+  width: fit-content;
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--recessed);
+}
+
+.periods a {
+  min-width: 48px;
+  min-height: 32px;
+  display: grid;
+  place-items: center;
+  padding: 0 10px;
+  border-radius: 7px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  transition: color 160ms var(--ease-standard), background 160ms var(--ease-standard);
+}
+
+.periods a:hover {
+  color: var(--text-primary);
+}
+
+.periods a[data-active] {
+  color: var(--text-primary);
+  background: var(--raised);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.metricCard {
+  min-height: 124px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 17px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.metricCard > span {
+  color: var(--text-tertiary);
+  font-size: 11px;
+}
+
+.metricCard > strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: clamp(19px, 2.3vw, 26px);
+  font-weight: 600;
+  line-height: 1.13;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metricCard > small {
+  min-height: 17px;
+  overflow: hidden;
+  color: var(--text-quaternary);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chartSurface {
+  min-height: 330px;
+}
+
+.chartHeading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.chartHeading > :first-child {
+  flex: 1;
+}
+
+.trendBadge {
+  min-height: 34px;
+  display: grid;
+  grid-template-columns: 14px auto;
+  align-items: center;
+  gap: 1px 6px;
+  padding: 5px 9px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-tertiary);
+  background: var(--recessed);
+  white-space: nowrap;
+}
+
+.trendBadge strong {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.trendBadge small {
+  grid-column: 2;
+  color: var(--text-quaternary);
+  font-size: 9px;
+}
+
+.trendBadge[data-direction="up"],
+.trendBadge[data-direction="new"] {
+  color: var(--accent);
+}
+
+.insights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.insightCard {
+  min-height: 105px;
+  display: grid;
+  align-content: space-between;
+  gap: 7px;
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--recessed);
+}
+
+.insightCard span,
+.insightCard small {
+  color: var(--text-quaternary);
+  font-size: 10px;
+}
+
+.insightCard strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.twoColumn,
+.lowerGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.lowerGrid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+}
+
+.rankedList,
+.milestoneList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rankedList {
+  margin-inline: -8px;
+}
+
+.rankedList li {
+  min-height: 64px;
+  display: grid;
+  grid-template-columns: 24px 44px minmax(0, 1fr) minmax(100px, 132px);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 8px;
+  border-radius: 9px;
+  transition: background 160ms var(--ease-standard);
+}
+
+.rankedList li:hover {
+  background: var(--raised);
+}
+
+.rankedList li + li {
+  border-top: 1px solid color-mix(in oklch, var(--border-subtle) 65%, transparent);
+}
+
+.rank {
+  color: var(--text-quaternary);
+  font-size: 10px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowArtwork {
+  width: 44px;
+  height: 44px;
+  display: block;
+}
+
+.rowArtwork :global(.artwork) {
+  width: 44px !important;
+  height: 44px !important;
+}
+
+.rowCopy {
+  min-width: 0;
+  display: grid;
+}
+
+.rowCopy a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowCopy a:first-child {
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.rowCopy a:last-child:not(:first-child) {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.rowCopy a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rowCount {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  color: var(--text-quaternary);
+  font-size: 9px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowCount strong {
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rowCount small {
+  font-size: 9px;
+}
+
+.rowCount i {
+  height: 2px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--recessed);
+}
+
+.rowCount b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--text-tertiary);
+}
+
+.recentList {
+  margin-inline: -8px;
+}
+
+.recentRow {
+  min-height: 61px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 8px;
+  border-radius: 9px;
+}
+
+.recentRow + .recentRow {
+  border-top: 1px solid color-mix(in oklch, var(--border-subtle) 65%, transparent);
+}
+
+.recentRow :global(.artwork) {
+  width: 42px !important;
+  height: 42px !important;
+}
+
+.recentCopy {
+  min-width: 0;
+  display: grid;
+}
+
+.recentCopy a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recentCopy a:first-child {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.recentCopy a:last-child {
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.recentCopy a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.recentRow time {
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.nextMilestone {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--recessed);
+}
+
+.milestoneTarget {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.nextMilestone > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nextMilestone strong {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.nextMilestone small,
+.progressLabel {
+  color: var(--text-quaternary);
+  font-size: 10px;
+}
+
+.nextMilestone > i {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 4px;
+  background: var(--raised);
+}
+
+.nextMilestone > i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+}
+
+.progressLabel {
+  position: absolute;
+  right: 14px;
+  bottom: 4px;
+}
+
+.milestoneList {
+  display: grid;
+  gap: 2px;
+  margin-top: 14px;
+}
+
+.milestoneList li {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 4px;
+  border-bottom: 1px solid color-mix(in oklch, var(--border-subtle) 65%, transparent);
+}
+
+.milestoneList li > span {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--accent);
+  background: color-mix(in oklch, var(--accent) 10%, var(--recessed));
+}
+
+.milestoneList li > div {
+  min-width: 0;
+  display: grid;
+}
+
+.milestoneList strong {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.milestoneList small {
+  color: var(--text-quaternary);
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.completedMilestones {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.contextSurface {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 17px;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-tertiary);
+}
+
+.contextSurface > svg:first-child {
+  width: 34px;
+  height: 34px;
+  padding: 7px;
+  border-radius: 8px;
+  background: var(--recessed);
+}
+
+.contextSurface > div {
+  display: grid;
+}
+
+.contextSurface span,
+.contextSurface small {
+  color: var(--text-quaternary);
+  font-size: 9px;
+}
+
+.contextSurface div > a {
+  width: fit-content;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.contextSurface a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.emptySection {
+  min-height: 110px;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--text-quaternary);
+  font-size: 11px;
+  text-align: center;
+}
+
+@media (max-width: 860px) {
+  .metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .twoColumn,
+  .lowerGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .hero {
+    min-height: 0;
+    align-items: start;
+    flex-direction: column;
+    gap: 20px;
+    padding-bottom: 10px;
+  }
+
+  .heroArtwork {
+    width: 136px;
+    height: 136px;
+  }
+
+  .heroCopy h1 {
+    font-size: 38px;
+  }
+
+  .periods {
+    width: 100%;
+    overflow-x: auto;
+  }
+
+  .periods a {
+    min-width: 45px;
+    flex: 1 0 auto;
+  }
+
+  .insights {
+    grid-template-columns: 1fr;
+  }
+
+  .chartHeading {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .trendBadge {
+    margin-bottom: 17px;
+  }
+
+  .rankedList li {
+    grid-template-columns: 20px 40px minmax(0, 1fr) 86px;
+    gap: 8px;
+  }
+
+  .rowArtwork,
+  .rowArtwork :global(.artwork) {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  .recentRow {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .recentRow time {
+    grid-column: 2;
+  }
+}
+
+@media (max-width: 430px) {
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .metricCard {
+    min-height: 108px;
+  }
+
+  .breadcrumbs a,
+  .breadcrumbs span {
+    max-width: 105px;
+  }
+
+  .rankedList li {
+    grid-template-columns: 40px minmax(0, 1fr) 78px;
+  }
+
+  .rank {
+    display: none;
+  }
+}

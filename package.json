@@ -1,0 +1,38 @@
+{
+  "name": "myscrobbler",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "predev": "node scripts/free-port.mjs 3000",
+    "dev": "next dev -H 127.0.0.1 -p 3000",
+    "build": "next build",
+    "start": "next start -H 127.0.0.1",
+    "preview": "npm run build && npm run start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test-web.cjs && node scripts/test-playlist.cjs"
+  },
+  "dependencies": {
+    "lucide-react": "1.28.0",
+    "next": "16.2.12",
+    "postgres": "3.4.9",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "sharp": "0.35.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "26.1.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.2.12",
+    "postcss": "8.5.25",
+    "tailwindcss": "4.3.3",
+    "typescript": "6.0.3"
+  },
+  "overrides": {
+    "postcss": "8.5.25",
+    "sharp": "0.35.3"
+  }
+}

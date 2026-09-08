@@ -1,0 +1,24 @@
+.env
+.env.*
+!.env.example
+.cache
+__pycache__/
+*.py[cod]
+.DS_Store
+.streamlit/secrets.toml
+instance/
+*.log
+node_modules/
+.next/
+out/
+.vercel/
+tsconfig.tsbuildinfo
+backups/
+# Local reports may contain private listening totals or operational details.
+TRACKER_AUDIT.json
+PROJE_ANALIZI.md
+UYGULAMA_DURUMU.md
+GITHUB_ACTIONS_SECENEKLERI.md
+# ~180 MB of raw Spotify export JSON. Already ingested into Supabase, and large
+# enough that GitHub would warn on individual files; keep it out of the repo.
+Spotify Extended Streaming History/

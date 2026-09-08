@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <!--
+    Favicon for atakan.fm. Geometry matches components/brand-mark.tsx.
+
+    The dark tile is deliberate: the lime is bright enough to disappear against a
+    light tab strip on its own, so the mark carries its own background and stays
+    legible whether the browser chrome is light or dark.
+  -->
+  <rect width="32" height="32" rx="8" fill="#171717"/>
+  <g fill="#c6ff34">
+    <rect x="3.5" y="19" width="4" height="8" rx="2"/>
+    <rect x="10.5" y="6" width="4" height="21" rx="2"/>
+    <rect x="17.5" y="14" width="4" height="13" rx="2"/>
+    <rect x="24.5" y="10" width="4" height="17" rx="2"/>
+  </g>
+</svg>

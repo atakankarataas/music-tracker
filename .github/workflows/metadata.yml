@@ -1,0 +1,29 @@
+name: Spotify metadata enrichment
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: spotify-metadata
+  cancel-in-progress: false
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - run: python metadata_backfill.py
+        env:
+          DB_URI: ${{ secrets.DB_URI }}
+          SPOTIPY_CLIENT_ID: ${{ secrets.SPOTIPY_CLIENT_ID }}
+          SPOTIPY_CLIENT_SECRET: ${{ secrets.SPOTIPY_CLIENT_SECRET }}
+          SPOTIPY_CACHE: ${{ secrets.SPOTIPY_CACHE }}
+          METADATA_BACKFILL_LIMIT: "2000"
+          METADATA_TIME_BUDGET_SECONDS: "240"
