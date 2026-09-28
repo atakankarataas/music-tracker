@@ -27,9 +27,23 @@ export function calendarRange(period: CalendarPeriod, start?: string, end?: stri
   };
 }
 
+/**
+ * Wrapped stops in mid-November so Spotify can prepare the release; it is not a
+ * calendar year. Reconstructing the cut-off from this archive's real Wrapped
+ * screenshots put it between 4 and 22 November. Fitting the reported top-five
+ * artists for 2023-2025 — the years that reflect how Wrapped is built now —
+ * settled on the 12th; the 8th scores the same and the 18th loses 2025.
+ *
+ * A December listening streak therefore belongs to no Wrapped at all, which is
+ * why the library keeps its own free date range for browsing the full year.
+ */
+export const WRAPPED_CUTOFF = "11-12";
+
 export function wrappedRange(requested?: string, today = localToday()) {
   const currentYear = Number(today.slice(0, 4));
   const candidate = requested && /^\d{4}$/.test(requested) ? Number(requested) : currentYear;
   const year = candidate >= 1900 && candidate <= currentYear ? candidate : currentYear;
-  return { year, currentYear, start: `${year}-01-01`, end: year === currentYear ? today : `${year}-12-31` };
+  const cutoff = `${year}-${WRAPPED_CUTOFF}`;
+  const end = year === currentYear && today < cutoff ? today : cutoff;
+  return { year, currentYear, start: `${year}-01-01`, end, cutoff, partial: end < cutoff };
 }
