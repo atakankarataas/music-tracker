@@ -25,7 +25,8 @@ def export_play(item):
     return dict(track_name=item['master_metadata_track_name'], artist_name=item['master_metadata_album_artist_name'],
                 album_name=item.get('master_metadata_album_album_name'), played_at=item['ts'],
                 spotify_id=uri.split(':')[-1] if uri.startswith('spotify:track:') else None,
-                ms_played=ms, skipped=item.get('skipped'), offline=item.get('offline'), source='export')
+                ms_played=ms, skipped=item.get('skipped'), offline=item.get('offline'),
+                incognito_mode=item.get('incognito_mode'), source='export')
 
 
 def main():

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from psycopg2.extras import execute_values
 
 COLUMNS = ('track_name', 'artist_name', 'album_name', 'played_at', 'spotify_id',
-           'image_url', 'album_id', 'artist_id', 'duration_ms', 'ms_played', 'skipped', 'offline', 'source')
+           'image_url', 'album_id', 'artist_id', 'duration_ms', 'ms_played', 'skipped', 'offline', 'incognito_mode', 'source')
 
 def parse_time(value):
     if isinstance(value, str):
@@ -32,7 +32,7 @@ def store_plays(cur, plays):
     cur.execute("""CREATE TEMP TABLE IF NOT EXISTS music_candidates (
       track_name text, artist_name text, album_name text, played_at timestamptz,
       spotify_id text, image_url text, album_id text, artist_id text,
-      duration_ms integer, ms_played integer, skipped boolean, offline boolean, source text
+      duration_ms integer, ms_played integer, skipped boolean, offline boolean, incognito_mode boolean, source text
     ) ON COMMIT DROP""")
     cur.execute("TRUNCATE pg_temp.music_candidates")
     execute_values(cur, 'INSERT INTO pg_temp.music_candidates VALUES %s',
@@ -45,13 +45,14 @@ def store_plays(cur, plays):
       artist_id = COALESCE(s.artist_id,c.artist_id), spotify_id = COALESCE(s.spotify_id,c.spotify_id),
       duration_ms = COALESCE(s.duration_ms,c.duration_ms), ms_played = COALESCE(c.ms_played,s.ms_played),
       skipped = COALESCE(c.skipped,s.skipped), offline = COALESCE(c.offline,s.offline),
+      incognito_mode = COALESCE(c.incognito_mode,s.incognito_mode),
       ingest_sources = ARRAY(SELECT DISTINCT unnest(s.ingest_sources || ARRAY[c.source]))
       FROM pg_temp.music_candidates c WHERE {match}""")
     cur.execute(f"""INSERT INTO public.scrobbles (
       track_name,artist_name,album_name,played_at,spotify_id,image_url,album_id,artist_id,
-      duration_ms,ms_played,skipped,offline,ingest_sources)
+      duration_ms,ms_played,skipped,offline,incognito_mode,ingest_sources)
       SELECT c.track_name,c.artist_name,c.album_name,c.played_at,c.spotify_id,c.image_url,c.album_id,c.artist_id,
-        c.duration_ms,c.ms_played,c.skipped,c.offline,ARRAY[c.source]
+        c.duration_ms,c.ms_played,c.skipped,c.offline,c.incognito_mode,ARRAY[c.source]
       FROM pg_temp.music_candidates c WHERE NOT EXISTS (SELECT 1 FROM public.scrobbles s WHERE {match})
       ON CONFLICT (played_at, spotify_id) DO NOTHING""")
     return cur.rowcount

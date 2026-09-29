@@ -460,7 +460,9 @@ export async function getEntityLegacyFeatures(
   if (!cleanValue) return null;
 
   const entityPredicate = kind === "artist"
-    ? byId ? sql`artist_id = ${cleanValue}` : sql`artist_name = ${cleanValue}`
+    ? byId
+      ? sql`(artist_id = ${cleanValue} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_id=${cleanValue}))`
+      : sql`(artist_name = ${cleanValue} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name=${cleanValue}))`
     : kind === "album"
       ? byId ? sql`album_id = ${cleanValue}` : sql`album_name = ${cleanValue}`
       : byId ? sql`spotify_id = ${cleanValue}` : sql`track_name = ${cleanValue}`;
@@ -863,7 +865,7 @@ async function getLibraryPage(
   const filterPredicate = !filter
     ? sql``
     : filter.type === "artist"
-      ? sql`AND artist_name = ${filter.value}`
+      ? sql`AND (artist_name = ${filter.value} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name=${filter.value}))`
       : filter.type === "album"
         ? sql`AND album_name = ${filter.value}`
         : sql`AND track_name = ${filter.value}`;
@@ -931,65 +933,34 @@ async function getLibraryPage(
         : sql`play_count DESC, title ASC`;
 
   if (mode === "artists") {
-    const useRollup = period === "all" && !filter;
-    const [row] = useRollup
-      ? await sql<LibraryPageRow[]>`
-          WITH grouped AS (
-            SELECT
-              artist_name AS title,
-              NULL::text AS subtitle,
-              plays::int AS play_count,
-              image_url,
-              artist_id AS entity_id,
-              NULL::text AS album_id,
-              last_play
-            FROM public.mv_music_artist_totals
-            WHERE (${search} = '' OR artist_name ILIKE ${term})
-          ),
-          ranked AS (
-            SELECT *,
-              (row_number() OVER (ORDER BY ${order}))::int AS rank,
-              max(play_count) OVER ()::int AS max_count
-            FROM grouped
-          ),
-          page AS (SELECT * FROM ranked WHERE rank BETWEEN ${firstRank} AND ${lastRank})
-          SELECT
-            (SELECT count(*)::text FROM grouped) AS total_count,
-            COALESCE((SELECT json_agg(json_build_object(
-              'rank', rank, 'title', title, 'subtitle', subtitle,
-              'imageUrl', image_url, 'count', play_count, 'id', entity_id,
-              'albumId', album_id, 'playedAt', NULL, 'maxCount', max_count
-            ) ORDER BY rank) FROM page), '[]'::json) AS items
-        `
-      : await sql<LibraryPageRow[]>`
-          WITH grouped AS (
-            SELECT
-              artist_name AS title,
-              NULL::text AS subtitle,
-              count(*)::int AS play_count,
-              max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
-              max(artist_id) FILTER (WHERE artist_id IS NOT NULL) AS entity_id,
-              NULL::text AS album_id,
-              max(played_at) AS last_play
-            FROM public.scrobbles
-            WHERE true ${datePredicate} ${filterPredicate} ${searchPredicate}
-            GROUP BY artist_name
-          ),
-          ranked AS (
-            SELECT *,
-              (row_number() OVER (ORDER BY ${order}))::int AS rank,
-              max(play_count) OVER ()::int AS max_count
-            FROM grouped
-          ),
-          page AS (SELECT * FROM ranked WHERE rank BETWEEN ${firstRank} AND ${lastRank})
-          SELECT
-            (SELECT count(*)::text FROM grouped) AS total_count,
-            COALESCE((SELECT json_agg(json_build_object(
-              'rank', rank, 'title', title, 'subtitle', subtitle,
-              'imageUrl', image_url, 'count', play_count, 'id', entity_id,
-              'albumId', album_id, 'playedAt', NULL, 'maxCount', max_count
-            ) ORDER BY rank) FROM page), '[]'::json) AS items
-        `;
+    const artistFilter = !filter ? sql`` : filter.type === "artist"
+      ? sql`AND artist_name = ${filter.value}` : filterPredicate;
+    const [row] = await sql<LibraryPageRow[]>`
+      WITH credited AS (
+        SELECT s.played_at,s.track_name,s.album_name,s.image_url,
+          coalesce(c.artist_name,s.artist_name) AS artist_name,
+          coalesce(c.artist_id,s.artist_id) AS artist_id
+        FROM public.scrobbles s
+        LEFT JOIN (
+          SELECT spotify_id,artist_id,max(artist_name) AS artist_name
+          FROM public.music_track_artists GROUP BY spotify_id,artist_id
+        ) c ON c.spotify_id=s.spotify_id
+        WHERE true ${datePredicate}
+      ), grouped AS (
+        SELECT artist_name AS title, NULL::text AS subtitle, count(*)::int AS play_count,
+          max(image_url) AS image_url, max(artist_id) AS entity_id,
+          NULL::text AS album_id, max(played_at) AS last_play
+        FROM credited WHERE true ${artistFilter} ${searchPredicate} GROUP BY artist_name
+      ), ranked AS (
+        SELECT *, (row_number() OVER (ORDER BY ${order}))::int AS rank,
+          max(play_count) OVER ()::int AS max_count FROM grouped
+      ), page AS (SELECT * FROM ranked WHERE rank BETWEEN ${firstRank} AND ${lastRank})
+      SELECT (SELECT count(*)::text FROM grouped) AS total_count,
+        coalesce((SELECT json_agg(json_build_object(
+          'rank',rank,'title',title,'subtitle',subtitle,'imageUrl',image_url,
+          'count',play_count,'id',entity_id,'albumId',album_id,'playedAt',NULL,'maxCount',max_count
+        ) ORDER BY rank) FROM page),'[]'::json) AS items
+    `;
     return { total: Number(row?.total_count ?? 0), items: mapLibraryItems(mode, row?.items ?? []) };
   }
 
@@ -1145,7 +1116,7 @@ async function getLibraryChart(
   const filterPredicate = !filter
     ? sql``
     : filter.type === "artist"
-      ? sql`AND artist_name = ${filter.value}`
+      ? sql`AND (artist_name = ${filter.value} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name=${filter.value}))`
       : filter.type === "album"
         ? sql`AND album_name = ${filter.value}`
         : sql`AND track_name = ${filter.value}`;
@@ -1153,7 +1124,7 @@ async function getLibraryChart(
   const searchPredicate = !search
     ? sql``
     : mode === "artists"
-      ? sql`AND artist_name ILIKE ${term}`
+      ? sql`AND (artist_name ILIKE ${term} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name ILIKE ${term}))`
       : mode === "albums"
         ? sql`AND (album_name ILIKE ${term} OR artist_name ILIKE ${term})`
         : sql`AND (track_name ILIKE ${term} OR artist_name ILIKE ${term} OR album_name ILIKE ${term})`;
@@ -1232,7 +1203,7 @@ async function getLibraryRelated(
           AND played_at <= now()
         `;
   const filterPredicate = filter.type === "artist"
-    ? sql`artist_name = ${filter.value}`
+    ? sql`(artist_name = ${filter.value} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name=${filter.value}))`
     : filter.type === "album"
       ? sql`album_name = ${filter.value}`
       : sql`track_name = ${filter.value}`;

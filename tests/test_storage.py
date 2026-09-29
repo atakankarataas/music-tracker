@@ -17,10 +17,11 @@ class StorageTests(unittest.TestCase):
 
     def test_export_preserves_real_duration_and_skip(self):
         row=dict(master_metadata_track_name='Track',master_metadata_album_artist_name='Artist',
-            ts='2026-01-01T00:00:00Z',ms_played=45678,skipped=True,offline=True,spotify_track_uri='spotify:track:abc')
+            ts='2026-01-01T00:00:00Z',ms_played=45678,skipped=True,offline=True,incognito_mode=True,spotify_track_uri='spotify:track:abc')
         result=export_play(row)
         self.assertEqual(result['ms_played'],45678)
         self.assertTrue(result['skipped'])
+        self.assertTrue(result['incognito_mode'])
         self.assertEqual(result['source'],'export')
         row['ms_played']=29999
         self.assertIsNone(export_play(row))

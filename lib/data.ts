@@ -161,38 +161,31 @@ function mapDetail(kind: DetailData["kind"], row: DetailRow): DetailData {
 
 export async function getArtistDetail(name: string): Promise<DetailData | null> {
   const [row] = await sql<DetailRow[]>`
-    WITH entity AS (
-      SELECT * FROM public.mv_music_artist_totals WHERE artist_name = ${name}
+    WITH filtered AS MATERIALIZED (
+      SELECT * FROM public.scrobbles s WHERE s.artist_name=${name}
+        OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=s.spotify_id AND c.artist_name=${name})
+    ), entity AS (
+      SELECT count(*) AS plays, max(image_url) AS image_url,
+        min(played_at) AS first_play,max(played_at) AS last_play FROM filtered
     )
-    SELECT
-      entity.artist_name AS title,
-      NULL::text AS subtitle,
-      entity.image_url,
-      entity.plays::text AS total_plays,
-      entity.first_play::text,
-      entity.last_play::text,
-      (SELECT count(*)::text FROM public.mv_music_artist_daily d
-       WHERE d.artist_name = entity.artist_name) AS active_days,
-      COALESCE((SELECT json_agg(item ORDER BY item.plays DESC) FROM (
-        SELECT track_name AS name, NULL::text AS secondary, plays::int AS plays,
-          image_url AS "imageUrl", spotify_id AS id
-        FROM public.mv_music_track_totals
-        WHERE artist_name = entity.artist_name
-        ORDER BY plays DESC LIMIT 10
-      ) item), '[]'::json) AS top_items,
-      COALESCE((SELECT json_agg(item ORDER BY item."playedAt" DESC) FROM (
-        SELECT track_name AS "trackName", artist_name AS "artistName",
-          played_at::text AS "playedAt", image_url AS "imageUrl", spotify_id AS "spotifyId"
-        FROM public.scrobbles
-        WHERE artist_name = entity.artist_name
-        ORDER BY played_at DESC LIMIT 8
-      ) item), '[]'::json) AS recent,
-      COALESCE((SELECT json_agg(json_build_object('label', to_char(day, 'DD Mon'), 'value', plays) ORDER BY day) FROM (
-        SELECT day, plays::int AS plays FROM public.mv_music_artist_daily
-        WHERE artist_name = entity.artist_name
-          AND day >= (now() AT TIME ZONE 'Europe/Istanbul')::date - 29
-      ) chart), '[]'::json) AS daily
-    FROM entity
+    SELECT ${name} AS title, NULL::text AS subtitle,entity.image_url,
+      entity.plays::text AS total_plays,entity.first_play::text,entity.last_play::text,
+      (SELECT count(DISTINCT (played_at AT TIME ZONE 'Europe/Istanbul')::date)::text FROM filtered) AS active_days,
+      coalesce((SELECT json_agg(item ORDER BY item.plays DESC,item.name) FROM (
+        SELECT track_name AS name, max(artist_name) AS secondary,count(*)::int AS plays,
+          max(image_url) AS "imageUrl",spotify_id AS id FROM filtered
+        GROUP BY spotify_id,track_name ORDER BY plays DESC,name LIMIT 10
+      ) item),'[]'::json) AS top_items,
+      coalesce((SELECT json_agg(item ORDER BY item."playedAt" DESC) FROM (
+        SELECT track_name AS "trackName",artist_name AS "artistName",played_at::text AS "playedAt",
+          image_url AS "imageUrl",spotify_id AS "spotifyId" FROM filtered ORDER BY played_at DESC LIMIT 8
+      ) item),'[]'::json) AS recent,
+      coalesce((SELECT json_agg(json_build_object('label',to_char(day,'DD Mon'),'value',plays) ORDER BY day) FROM (
+        SELECT (played_at AT TIME ZONE 'Europe/Istanbul')::date AS day,count(*)::int AS plays
+        FROM filtered WHERE played_at >= ((now() AT TIME ZONE 'Europe/Istanbul')::date-29)::timestamp AT TIME ZONE 'Europe/Istanbul'
+        GROUP BY 1
+      ) chart),'[]'::json) AS daily
+    FROM entity WHERE entity.plays > 0
   `;
   return row?.title ? mapDetail("artist", row) : null;
 }

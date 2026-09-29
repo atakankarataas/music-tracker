@@ -1,10 +1,5 @@
-"""Populate music_track_artists so a play can credit every artist on the track.
-
-Spotify's track object lists artists in order but never marks which are guests,
-so the only available signal is the title: a name introduced by "(feat. ...)"
-is a guest. Calibrating against eight years of real Wrapped results showed a
-co-primary artist is credited in full and a guest only marginally, which is why
-the flag is stored rather than recomputed at query time.
+"""Populate catalogue credits. Title-derived guest flags are heuristics only.
+Spotify's track artist order does not identify primary/featured billing roles.
 """
 import os
 import re
@@ -23,8 +18,8 @@ from psycopg2.extras import execute_values
 
 from ingest.migrate import load_local_env
 
-# Spotify names guests in the title, so the parenthetical is the only signal for
-# which of the credited artists are guests rather than co-primaries.
+# Optional title hint, not authoritative billing metadata. Wrapped does not
+# infer a verified guest role from this flag.
 GUESTS = re.compile(r"[\(\[]\s*(?:feat|ft|with)[\.\s]([^)\]]*)[\)\]]", re.I)
 TOKEN_URL = "https://accounts.spotify.com/api/token"
 
@@ -49,19 +44,24 @@ def is_guest(title_names, artist):
     return bool(words) and all(word in listed for word in words)
 
 
-def access_token():
+def access_token(force_refresh=False):
     import json
     from datetime import datetime, timezone
 
-    cache = json.loads((ROOT / ".cache").read_text())
-    if cache.get("expires_at", 0) > datetime.now(timezone.utc).timestamp() + 60:
+    cache_path = Path(os.environ.get("SPOTIPY_CACHE_PATH", str(ROOT / ".cache")))
+    raw_cache = os.environ.get("SPOTIPY_CACHE")
+    cache = json.loads(raw_cache) if raw_cache else json.loads(cache_path.read_text()) if cache_path.exists() else {}
+    if not force_refresh and cache.get("expires_at", 0) > datetime.now(timezone.utc).timestamp() + 60:
         return cache["access_token"]
+    refresh_token = os.environ.get("SPOTIFY_REFRESH_TOKEN") or cache.get("refresh_token")
+    if not refresh_token:
+        raise RuntimeError("A Spotify refresh token or SPOTIPY_CACHE is required")
     response = requests.post(
         TOKEN_URL,
         auth=(os.environ["SPOTIPY_CLIENT_ID"], os.environ["SPOTIPY_CLIENT_SECRET"]),
         data={
             "grant_type": "refresh_token",
-            "refresh_token": os.environ.get("SPOTIFY_REFRESH_TOKEN") or cache["refresh_token"],
+            "refresh_token": refresh_token,
         },
         timeout=20,
     )
@@ -70,17 +70,20 @@ def access_token():
 
 
 def rows_for(track_id, track):
-    """One row per credited artist. Position 0 is the primary artist."""
+    """One row per credited artist. Position 0 is first in catalogue order."""
     if not track:
         return []
     match = GUESTS.search(track.get("name") or "")
     listed = match.group(1) if match else ""
-    return [
-        (track_id, index, artist["id"], artist["name"],
-         bool(listed) and index > 0 and is_guest(listed, artist["name"]))
-        for index, artist in enumerate(track.get("artists") or [])
-        if artist and artist.get("id")
-    ]
+    seen = set()
+    rows = []
+    for index, artist in enumerate(track.get("artists") or []):
+        if not artist or not artist.get("id") or not artist.get("name") or artist["id"] in seen:
+            continue
+        seen.add(artist["id"])
+        rows.append((track_id, index, artist["id"], artist["name"],
+                     bool(listed) and index > 0 and is_guest(listed, artist["name"])))
+    return rows
 
 
 def main():
@@ -101,47 +104,77 @@ def main():
         connection.close()
         return
 
-    token = access_token()
-    headers = {"Authorization": f"Bearer {token}"}
+    headers = {"Authorization": f"Bearer {access_token()}"}
     stored = 0
-    for offset in range(0, len(pending), 50):
-        batch = pending[offset:offset + 50]
-        for _ in range(4):
-            response = requests.get(
-                "https://api.spotify.com/v1/tracks",
-                headers=headers, params={"ids": ",".join(batch)}, timeout=25,
-            )
-            if response.status_code == 200:
-                break
-            if response.status_code == 401:
-                headers = {"Authorization": f"Bearer {access_token()}"}
-            elif response.status_code == 429:
-                time.sleep(int(response.headers.get("Retry-After", "2")) + 1)
-            else:
-                time.sleep(2)
-        else:
-            print(f"batch at {offset} failed; continuing")
-            continue
+    failed = 0
+    deadline = time.monotonic() + int(os.environ.get("TRACK_ARTIST_TIME_BUDGET_SECONDS", "120"))
+    batch_supported = True
 
-        rows = []
-        for track_id, track in zip(batch, response.json()["tracks"]):
-            rows.extend(rows_for(track_id, track))
-        if rows:
-            with connection.cursor() as cursor:
-                execute_values(
-                    cursor,
-                    """INSERT INTO public.music_track_artists
-                       (spotify_id, position, artist_id, artist_name, is_featured)
-                       VALUES %s ON CONFLICT (spotify_id, position) DO UPDATE SET
-                         artist_id = excluded.artist_id, artist_name = excluded.artist_name,
-                         is_featured = excluded.is_featured, fetched_at = now()""",
-                    rows, page_size=500,
-                )
-            connection.commit()
-            stored += len(rows)
-        time.sleep(0.05)
-    connection.close()
+    def fetch(url, params=None):
+        for attempt in range(3):
+            if time.monotonic() >= deadline:
+                raise TimeoutError("Artist-credit time budget exhausted")
+            response = requests.get(url, headers=headers, params=params, timeout=15)
+            if response.status_code == 401 and attempt == 0:
+                headers["Authorization"] = f"Bearer {access_token(force_refresh=True)}"
+                continue
+            if response.status_code == 429:
+                wait = max(1, int(response.headers.get("Retry-After", "2")))
+                if wait > 30 or time.monotonic() + wait >= deadline:
+                    raise TimeoutError("Spotify rate limit exceeds this run's budget")
+                time.sleep(wait)
+                continue
+            return response
+        raise RuntimeError("Spotify authorization or rate limit did not recover")
+
+    try:
+        for offset in range(0, len(pending), 50):
+            if time.monotonic() >= deadline:
+                break
+            batch = pending[offset:offset + 50]
+            tracks = None
+            if batch_supported:
+                response = fetch("https://api.spotify.com/v1/tracks", {"ids": ",".join(batch)})
+                if response.status_code in (400, 403, 404):
+                    batch_supported = False
+                else:
+                    response.raise_for_status()
+                    tracks = response.json()["tracks"]
+            if tracks is None:
+                tracks = []
+                for track_id in batch:
+                    response = fetch(f"https://api.spotify.com/v1/tracks/{track_id}")
+                    if response.status_code == 404:
+                        tracks.append(None)
+                    else:
+                        response.raise_for_status()
+                        tracks.append(response.json())
+            rows = []
+            for track_id, track in zip(batch, tracks):
+                rows.extend(rows_for(track_id, track))
+            if rows:
+                with connection.cursor() as cursor:
+                    execute_values(
+                        cursor,
+                        """INSERT INTO public.music_track_artists
+                           (spotify_id, position, artist_id, artist_name, is_featured)
+                           VALUES %s ON CONFLICT (spotify_id, position) DO UPDATE SET
+                             artist_id = excluded.artist_id, artist_name = excluded.artist_name,
+                             is_featured = excluded.is_featured, fetched_at = now()""",
+                        rows, page_size=500,
+                    )
+                connection.commit()
+                stored += len(rows)
+            time.sleep(0.05)
+    except (requests.RequestException, RuntimeError, TimeoutError) as exc:
+        connection.rollback()
+        failed = 1
+        print(f"Artist enrichment stopped ({type(exc).__name__}); completed batches retained.")
+    finally:
+        connection.close()
     print(f"stored {stored} artist credits")
+    if failed:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

@@ -53,6 +53,7 @@ async function loadHomePeriodData(
   period: HomePeriod,
   requestedStart: string,
   requestedEnd: string,
+  wrapped = false,
 ): Promise<HomePeriodData> {
   const range = calendarRange(period, requestedStart, requestedEnd);
   period = range.period;
@@ -97,6 +98,7 @@ async function loadHomePeriodData(
       CROSS JOIN bounds
       WHERE s.played_at >= bounds.start_day::timestamp AT TIME ZONE 'Europe/Istanbul'
         AND s.played_at < (bounds.end_day + 1)::timestamp AT TIME ZONE 'Europe/Istanbul'
+        AND (${!wrapped} OR ((s.ms_played IS NULL OR s.ms_played > 30000) AND s.incognito_mode IS NOT TRUE))
     ),
     totals AS (
       SELECT
@@ -113,14 +115,18 @@ async function loadHomePeriodData(
       SELECT total_plays::bigint AS total_plays, first_play
       FROM public.mv_music_totals
     ),
+    artist_credits AS (
+      SELECT coalesce(c.artist_name,s.artist_name) AS name, s.image_url,
+        coalesce(c.artist_id,s.artist_id) AS id
+      FROM filtered s
+      LEFT JOIN (
+        SELECT spotify_id,artist_id,max(artist_name) AS artist_name
+        FROM public.music_track_artists GROUP BY spotify_id,artist_id
+      ) c ON c.spotify_id=s.spotify_id
+    ),
     artist_rank AS (
-      SELECT artist_name AS name, count(*)::int AS plays,
-        max(image_url) FILTER (WHERE image_url IS NOT NULL) AS "imageUrl",
-        max(artist_id) FILTER (WHERE artist_id IS NOT NULL) AS id
-      FROM filtered
-      GROUP BY artist_name
-      ORDER BY count(*) DESC, artist_name
-      LIMIT ${period === "wrapped" ? 20 : 5}
+      SELECT name, count(*)::int AS plays, max(image_url) AS "imageUrl", max(id) AS id
+      FROM artist_credits GROUP BY name ORDER BY count(*) DESC,name LIMIT 5
     ),
     album_rank AS (
       SELECT album_name AS name, artist_name AS secondary, count(*)::int AS plays,
@@ -159,7 +165,7 @@ async function loadHomePeriodData(
       archive.total_plays::text AS archive_total_plays,
       archive.first_play::text AS archive_first_play,
       totals.total_plays::text,
-      totals.artists::text,
+      (SELECT count(DISTINCT name)::text FROM artist_credits) AS artists,
       totals.albums::text,
       totals.tracks::text,
       COALESCE((SELECT json_agg(artist_rank ORDER BY plays DESC, name) FROM artist_rank), '[]'::json) AS top_artists,
@@ -202,10 +208,10 @@ async function loadHomePeriodData(
   };
 }
 
-export function getHomePeriodData(period: HomePeriod, start = "", end = "") {
+export function getHomePeriodData(period: HomePeriod, start = "", end = "", wrapped = false) {
   // Listening data is append-only and the home route is explicitly dynamic.
   // Keeping this behind unstable_cache made a hard reload and an App Router
   // navigation disagree: the latter could reuse a prefetched, minute-old RSC
   // payload. Always run the query for the request instead.
-  return loadHomePeriodData(period, start, end);
+  return loadHomePeriodData(period, start, end, wrapped);
 }

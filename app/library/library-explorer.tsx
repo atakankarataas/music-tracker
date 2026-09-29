@@ -303,6 +303,7 @@ export function LibraryExplorer({ data, state }: { data: LibraryViewData; state:
             </button>
           ) : <p className="eyebrow">Collection</p>}
           <h1>{data.headerInfo?.title ?? "Library"}</h1>
+          <p className="feature-footnote">Every credited artist receives one full play. Artist totals overlap; overall listening counts each play once. Missing catalogue credits fall back to the recorded artist.</p>
           <p className="page-description">
             {data.headerInfo
               ? `${formatNumber(data.headerInfo.count)} scrobbles${data.headerInfo.trackCount ? ` · ${formatNumber(data.headerInfo.trackCount)} tracks` : ""}`

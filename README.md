@@ -159,10 +159,8 @@ The pre-migration custom-format dump is kept in the gitignored `backups/` direct
 
 ## Archive features
 
-- **Wrapped** (`/wrapped` and the home period selector): January 1 through today,
-  in Europe/Istanbul, ranked by recorded plays. Includes artists, albums, tracks
-  and a chart with quiet periods included. This is an archive ranking; Spotify's
-  official eligibility and cutoff rules can differ.
+- **Wrapped** (`/wrapped`): an estimated completed-year recap, separate from
+  free calendar ranges. See the artist-credit and Wrapped methodology below.
 - **Discover** (`/discover`): forgotten favorites, monthly highlights, rising/new
   artists, returning albums and a month picker for the musical time machine.
 - Monthly notes are stored in Postgres. Existing library saved filters remain
@@ -184,8 +182,8 @@ Genre and mood labels are approximate metadata, not audio analysis.
 ### Wrapped stories and deeper insights
 
 Wrapped now includes an album-cover collage, archive-year picker, artist podium,
-five keyboard-accessible story cards and a local PNG download. Current-year
-recaps end today; completed years use January 1–December 31. Downloads do not
+five keyboard-accessible story cards and a local PNG download. Recaps use the
+explicitly estimated Wrapped window; free date selection remains in the archive. Downloads do not
 upload or automatically share listening data.
 
 Insights adds 30/90/365-day windows for streaks, artists first seen in the archive,
@@ -195,3 +193,43 @@ calendar boundaries. The existing charts below retain their explicitly labelled
 lifetime/calendar ranges. A streak is consecutive recorded days inside the
 selected window; discovery means first seen in this archive, not necessarily
 first ever heard by the listener.
+
+### Artist credits and Wrapped estimates
+
+Normal home/library rankings credit each catalogue artist in full; total plays
+still count each listening event once. Artist filters and detail pages include
+collaborations. Missing catalogue credits fall back to the recorded artist.
+
+Wrapped is an explicitly labelled reconstruction, limited to completed years.
+Its 1 January–12 November window is an estimate: Spotify publishes mid-November,
+not a specific cutoff day. The selectable weighted model uses 1 for the first
+catalogue artist and 0.35 for the others. These are calibration assumptions,
+not Spotify coefficients, and catalogue order is not authoritative billing.
+“All credited artists” and “Recorded artist only” provide comparison models.
+Weighted values are points, not stream counts. No claim is made that album
+play counts reproduce Spotify's separate album ranking algorithm.
+
+Apply migration 0015 before deploying this version, then restore privacy flags:
+
+```sh
+python3 ingest/migrate.py
+python3 ingest/backfill_privacy.py
+```
+
+Wrapped rankings exclude known Private Sessions and measured plays <=30s.
+Unknown privacy/duration remain provisional and their counts are visible.
+Normal archive browsing includes private sessions. The archive stores eligible
+music plays, so its duration subtotal cannot reproduce official total minutes
+(which also include short plays and other content). Taste Profile exclusions
+and Spotify's content filters cannot be reconstructed from this archive.
+
+Regression and read-only integration checks:
+
+```sh
+MUSIC_TEST_DATABASE=1 node --env-file=.env scripts/test-analytics.cjs
+node --env-file=.env scripts/verify-analytics.cjs
+```
+
+The SQL regression test only writes temporary tables. For local screenshot
+comparison use `python3 scripts/audit-wrapped.py --help`; keep personal reference
+files and reports inside the gitignored `reports/` directory.

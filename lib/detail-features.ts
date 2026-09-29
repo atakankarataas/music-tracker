@@ -239,7 +239,9 @@ async function loadDetailPeriodFeatures(
   if (!cleanValue) return null;
 
   const entityPredicate = kind === "artist"
-    ? byId ? sql`artist_id = ${cleanValue}` : sql`artist_name = ${cleanValue}`
+    ? byId
+      ? sql`(artist_id = ${cleanValue} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_id=${cleanValue}))`
+      : sql`(artist_name = ${cleanValue} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name=${cleanValue}))`
     : kind === "album"
       ? byId ? sql`album_id = ${cleanValue}` : sql`album_name = ${cleanValue}`
       : byId ? sql`spotify_id = ${cleanValue}` : sql`track_name = ${cleanValue}`;

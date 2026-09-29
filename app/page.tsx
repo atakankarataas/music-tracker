@@ -75,7 +75,7 @@ export default async function HomePage({
         description={range.archiveFirstPlay ? `A private record of ${formatNumber(range.archiveTotalPlays)} plays across ${years} years, beginning ${formatDate(range.archiveFirstPlay)}.` : "Your listening history."}
         action={(
           <div className={styles.headerActions}>
-            <Link className="quiet-link" href="/wrapped">Spotify Wrapped ↗</Link>
+            <Link className="quiet-link" href="/wrapped">Wrapped estimate ↗</Link>
             <Link className="quiet-link" href="/discover">Discover ↗</Link>
             <Link className="quiet-link" href="/search"><Search size={15} /> Search archive</Link>
             <Link className="quiet-link" href="/insights">Explore insights <ArrowUpRight size={15} /></Link>
@@ -114,8 +114,8 @@ export default async function HomePage({
 
       <div className={styles.threeColumns}>
         <Surface>
-          <SectionHeader title="Top artists" href={libraryHref("artists")} />
-          <EntityList items={range.topArtists} kind="artist" />
+          <SectionHeader title="Top artists" detail="Full credit for every listed artist, including collaborators" href={libraryHref("artists")} />
+          <EntityList items={range.topArtists} kind="artist" itemHref={item => `${libraryHref("tracks")}&filter_type=artist&filter_value=${encodeURIComponent(item.name)}`} />
         </Surface>
         <Surface>
           <SectionHeader title="Top albums" href={libraryHref("albums")} />

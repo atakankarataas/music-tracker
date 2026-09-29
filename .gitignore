@@ -16,6 +16,7 @@ tsconfig.tsbuildinfo
 backups/
 # Local reports may contain private listening totals or operational details.
 TRACKER_AUDIT.json
+reports/
 PROJE_ANALIZI.md
 UYGULAMA_DURUMU.md
 GITHUB_ACTIONS_SECENEKLERI.md

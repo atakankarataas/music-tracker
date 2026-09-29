@@ -126,7 +126,11 @@ export function Artwork({
 export function EntityList({
   items,
   kind,
+  valueLabel = "plays",
+  itemHref,
 }: {
+  valueLabel?: string;
+  itemHref?: (item: EntityItem) => string;
   items: EntityItem[];
   kind: "artist" | "album" | "track";
 }) {
@@ -135,7 +139,7 @@ export function EntityList({
       {items.map((item, index) => (
         <Link
           className="entity-row"
-          href={entityHref(kind, item.name, item.id)}
+          href={itemHref ? itemHref(item) : entityHref(kind, item.name, item.id)}
           key={`${item.id ?? item.name}-${item.secondary ?? ""}`}
         >
           <span className="rank">{String(index + 1).padStart(2, "0")}</span>
@@ -144,7 +148,7 @@ export function EntityList({
             <strong>{item.name}</strong>
             {item.secondary ? <small>{item.secondary}</small> : null}
           </span>
-          <span className="play-count">{formatNumber(item.plays)} plays</span>
+          <span className="play-count">{formatNumber(item.plays)} {valueLabel}</span>
         </Link>
       ))}
     </div>

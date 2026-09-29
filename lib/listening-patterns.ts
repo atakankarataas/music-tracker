@@ -9,7 +9,7 @@ export type ListeningPatterns = {
 };
 
 /** All metrics use the same inclusive Istanbul calendar window. */
-export async function getListeningPatterns(start: string | null, end: string) {
+export async function getListeningPatterns(start: string | null, end: string, wrapped = false) {
   const [row] = await sql<ListeningPatterns[]>`
     WITH plays AS MATERIALIZED (
       SELECT *, (played_at AT TIME ZONE 'Europe/Istanbul')::date AS day,
@@ -17,6 +17,7 @@ export async function getListeningPatterns(start: string | null, end: string) {
       FROM public.scrobbles
       WHERE (${start}::date IS NULL OR played_at >= ${start}::date::timestamp AT TIME ZONE 'Europe/Istanbul')
         AND played_at < (${end}::date+1)::timestamp AT TIME ZONE 'Europe/Istanbul'
+        AND (${!wrapped} OR ((ms_played IS NULL OR ms_played > 30000) AND incognito_mode IS NOT TRUE))
     ), days AS (
       SELECT day,count(*)::int AS plays FROM plays GROUP BY day
     ), islands AS (

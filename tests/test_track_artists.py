@@ -1,5 +1,8 @@
 import unittest
-from ingest.track_artists import rows_for
+import json
+import time
+from unittest.mock import patch, Mock
+from ingest.track_artists import rows_for, access_token
 
 
 def track(name, *artists):
@@ -41,3 +44,19 @@ class TrackArtistTests(unittest.TestCase):
 
     def test_missing_track_yields_nothing(self):
         self.assertEqual(rows_for("t5", None), [])
+
+    def test_duplicate_catalogue_artist_gets_one_credit(self):
+        self.assertEqual(len(rows_for("t", track("Duet", "A", "A", "B"))), 2)
+
+    def test_ci_cache_does_not_require_a_local_file(self):
+        cache = json.dumps({"access_token": "ci-token", "expires_at": time.time()+3600})
+        with patch.dict('os.environ', {"SPOTIPY_CACHE": cache}, clear=True), patch('pathlib.Path.read_text', side_effect=AssertionError('local cache read')):
+            self.assertEqual(access_token(), 'ci-token')
+
+    def test_401_can_force_refresh_of_unexpired_token(self):
+        cache = json.dumps({"access_token": "rejected", "expires_at": time.time()+3600, "refresh_token": "refresh"})
+        response = Mock()
+        response.json.return_value = {"access_token": "new-token"}
+        with patch.dict('os.environ', {"SPOTIPY_CACHE": cache, "SPOTIPY_CLIENT_ID": "id", "SPOTIPY_CLIENT_SECRET": "secret"}, clear=True), patch('ingest.track_artists.requests.post', return_value=response) as post:
+            self.assertEqual(access_token(force_refresh=True), 'new-token')
+            self.assertEqual(post.call_args.kwargs['data']['refresh_token'], 'refresh')
