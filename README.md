@@ -159,7 +159,7 @@ The pre-migration custom-format dump is kept in the gitignored `backups/` direct
 
 ## Archive features
 
-- **Wrapped** (`/wrapped`): an estimated completed-year recap, separate from
+- **Wrapped** (`/wrapped`): an estimated yearly recap, opening on the current year, separate from
   free calendar ranges. See the artist-credit and Wrapped methodology below.
 - **Discover** (`/discover`): forgotten favorites, monthly highlights, rising/new
   artists, returning albums and a month picker for the musical time machine.
@@ -200,14 +200,17 @@ Normal home/library rankings credit each catalogue artist in full; total plays
 still count each listening event once. Artist filters and detail pages include
 collaborations. Missing catalogue credits fall back to the recorded artist.
 
-Wrapped is an explicitly labelled reconstruction, limited to completed years.
-Its 1 January–12 November window is an estimate: Spotify publishes mid-November,
-not a specific cutoff day. The selectable weighted model uses 1 for the first
-catalogue artist and 0.35 for the others. These are calibration assumptions,
-not Spotify coefficients, and catalogue order is not authoritative billing.
-“All credited artists” and “Recorded artist only” provide comparison models.
-Weighted values are points, not stream counts. No claim is made that album
-play counts reproduce Spotify's separate album ranking algorithm.
+Wrapped opens on the current year (2026 today) and ranks artists by plays only.
+Each credited artist receives one full play; overall totals count each listen
+once. It shares one eligible-window query for rankings, monthly activity and
+listening stories, with a 60-second aggregate cache keyed by exact dates.
+Overview opens with the last 30 days selected.
+
+Wrapped's 1 January–12 November window is an estimate: Spotify publishes
+mid-November, not a specific cutoff day. The current year ends at today until
+that cutoff. Older years remain selectable. This recap does not claim to
+reproduce Spotify's proprietary artist or album rankings; free date selection
+remains available in Overview and Library.
 
 Apply migration 0015 before deploying this version, then restore privacy flags:
 
@@ -217,7 +220,7 @@ python3 ingest/backfill_privacy.py
 ```
 
 Wrapped rankings exclude known Private Sessions and measured plays <=30s.
-Unknown privacy/duration remain provisional and their counts are visible.
+Unknown privacy/duration remain provisionally included, as disclosed on the page.
 Normal archive browsing includes private sessions. The archive stores eligible
 music plays, so its duration subtotal cannot reproduce official total minutes
 (which also include short plays and other content). Taste Profile exclusions

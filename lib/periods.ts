@@ -33,10 +33,10 @@ export const WRAPPED_CUTOFF = "11-12";
 
 export function wrappedRange(requested?: string, today = localToday()) {
   const currentYear = Number(today.slice(0, 4));
-  const latestYear = currentYear - 1;
+  const latestYear = currentYear;
   const candidate = requested && /^\d{4}$/.test(requested) ? Number(requested) : latestYear;
   const year = candidate >= 2018 && candidate <= latestYear ? candidate : latestYear;
   const cutoff = `${year}-${WRAPPED_CUTOFF}`;
-  return { year, currentYear, latestYear, start: `${year}-01-01`, end: cutoff,
+  return { year, currentYear, latestYear, start: `${year}-01-01`, end: year === currentYear && today < cutoff ? today : cutoff,
     cutoff, estimated: true as const };
 }

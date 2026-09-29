@@ -25,7 +25,7 @@ const periodOptions: Array<{ value: HomePeriod; label: string }> = [
 ];
 
 function periodHref(period: HomePeriod) {
-  return period === "30d" ? "/" : `/?period=${period}`;
+  return `/?period=${period}`;
 }
 
 export default async function HomePage({

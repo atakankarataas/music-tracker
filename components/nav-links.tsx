@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { BarChart3, House, Library, Search, Sparkles, Disc3 } from "lucide-react";
 
 const links = [
-  { href: "/", label: "Overview", icon: House },
+  { href: "/?period=30d", label: "Overview", icon: House },
   { href: "/library", label: "Library", icon: Library },
   { href: "/insights", label: "Insights", icon: BarChart3 },
   { href: "/discover", label: "Discover", icon: Sparkles },
@@ -19,7 +19,8 @@ export function NavLinks() {
   return (
     <nav aria-label="Primary navigation" className="nav-links">
       {links.map(({ href, label, icon: Icon }) => {
-        const active = href === "/" ? pathname === href : pathname.startsWith(href);
+        const route = href.split("?")[0];
+        const active = route === "/" ? pathname === route : pathname.startsWith(route);
         return (
           <Link
             aria-label={label}

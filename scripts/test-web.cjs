@@ -55,12 +55,16 @@ function load(file) {
   assert.equal(dates.calendarRange('custom','2026-09-07','2026-09-01','2026-09-07').period,'30d');
   assert.equal(dates.isIsoDate('2024-02-29'),true);
   assert.deepEqual(dates.wrappedRange('2024','2026-09-08'),
-    {year:2024,currentYear:2026,latestYear:2025,start:'2024-01-01',end:'2024-11-12',cutoff:'2024-11-12',estimated:true});
-  assert.equal(dates.wrappedRange(undefined,'2026-09-28').year,2025);
-  assert.equal(dates.wrappedRange('2026','2026-09-28').year,2025);
+    {year:2024,currentYear:2026,latestYear:2026,start:'2024-01-01',end:'2024-11-12',cutoff:'2024-11-12',estimated:true});
+  assert.equal(dates.wrappedRange(undefined,'2026-09-28').year,2026);
+  assert.equal(dates.wrappedRange('2026','2026-09-28').year,2026);
   assert.equal(dates.wrappedRange('2025','2026-12-31').end,'2025-11-12');
-  assert.equal(dates.wrappedRange('1820','2026-09-28').year,2025);
-  assert.equal(dates.wrappedRange('2099','2026-09-28').year,2025);
+  assert.equal(dates.wrappedRange('1820','2026-09-28').year,2026);
+  assert.equal(dates.wrappedRange('2099','2026-09-28').year,2026);
+  assert.equal(dates.wrappedRange(undefined,'2026-09-28').end,'2026-09-28');
+  assert.equal(dates.wrappedRange('2026','2026-12-31').end,'2026-11-12');
+  assert.equal(dates.wrappedRange(undefined,'2027-01-01').year,2027);
+  assert.equal(dates.wrappedRange(undefined,'2027-01-01').end,'2027-01-01');
   assert.equal(dates.wrappedRange('2018','2026-09-28').year,2018);
   assert.equal(dates.localToday(new Date('2025-12-31T21:05:00Z')),'2026-01-01');
   // Ordinary custom ranges retain November/December and never use Wrapped's estimate.

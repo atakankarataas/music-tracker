@@ -12,12 +12,13 @@ function load(filename) {
 Module._load = (request,...rest) => request==='server-only' ? {} : request==='next/cache' ? {unstable_cache:fn=>fn} : request.startsWith('@/') ? load(path.resolve(request.slice(2)+'.ts')) : original(request,...rest);
 (async()=>{
   try {
-    const {getWrappedArtists}=load(path.resolve('lib/wrapped.ts'));
+    const {loadWrappedData}=load(path.resolve('lib/wrapped.ts'));
     const {getHomePeriodData}=load(path.resolve('lib/home-features.ts'));
     const {getLegacyLibraryData}=load(path.resolve('lib/legacy-features.ts'));
-    for(const year of [2023,2024,2025]) {
-      const result=await getWrappedArtists(`${year}-01-01`,`${year}-11-12`);
-      console.log(year,JSON.stringify({artists:result.artists.slice(0,5).map(a=>a.name),total:result.totalPlays,unknownPrivacy:result.unknownPrivacyPlays}));
+    for(const year of [2023,2024,2025,2026]) {
+      const started=performance.now();
+      const result=await loadWrappedData(`${year}-01-01`,`${year}-11-12`);
+      console.log(year,JSON.stringify({artists:result.topArtists.slice(0,5).map(a=>a.name),total:result.totalPlays,ms:Math.round(performance.now()-started)}));
     }
     const home=await getHomePeriodData('custom','2026-01-01','2026-09-28');
     const library=await getLegacyLibraryData({mode:'artists',period:'custom',start:'2026-01-01',end:'2026-09-28'});
