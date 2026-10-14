@@ -88,7 +88,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
 
   const range = wrappedRange(start?.slice(0, 4));
   const wrapped = firstValue(params.ranking) === "wrapped" && period === "custom"
-    && start === range.start && end === range.end;
+    && start === range.start && typeof end === "string" && end >= range.start && end <= range.end;
   const result = await getLegacyLibraryData({
     wrapped,
     mode,
