@@ -4,7 +4,7 @@ A private, server-rendered view of a Spotify listening archive. A Supabase Edge 
 
 ## Architecture
 
-- The production tracker runs as `supabase/functions/spotify-sync` every two minutes through Supabase Cron, with a daily recovery scan. Scheduled calls were verified on 14 October 2026 before removing the GitHub tracker schedule. GitHub remains available as a manual fallback. The same track/time matching is used by both providers and the export importer.
+- The production tracker runs as `supabase/functions/spotify-sync` every two minutes through Supabase Cron, with a daily recovery scan. Scheduled calls were verified on 14 October 2026 before removing the GitHub tracker schedule. At the owner's request, GitHub Actions was then disabled for this repository, including CI, manual tracker runs and metadata enrichment. Workflow files remain for reference; re-enable repository Actions before using them. The same track/time matching is used by both providers and the export importer.
 - `ingest/import_history.py` backfills a Spotify "Extended Streaming History" export.
 - `db/migrations/` owns the database schema, permissions, indexes and analytics rollups.
 - `ingest/migrate.py` applies forward-only, checksummed migrations.
@@ -94,12 +94,32 @@ Artwork is served straight from Spotify's CDN (`images.unoptimized` in
 routing a large archive through Vercel's optimizer can exhaust its source-image
 allowance without a meaningful saving.
 
-The manual fallback workflow needs `DB_URI`, `SPOTIPY_CLIENT_ID`, `SPOTIPY_CLIENT_SECRET`
+If GitHub Actions is re-enabled, the manual fallback workflow needs `DB_URI`, `SPOTIPY_CLIENT_ID`, `SPOTIPY_CLIENT_SECRET`
 and `SPOTIPY_CACHE` as GitHub Actions secrets. Normal runs scan until two pages
 overlap the newest Supabase record. Supabase Cron runs a daily recovery scan at
 03:15 UTC (06:15 Istanbul), attempting up to 20 pages across a seven-day lookback
 window. A manual workflow run can enable the same recovery mode with its
-`recovery` input. Metadata enrichment and CI still run on GitHub Actions.
+`recovery` input. GitHub CI and scheduled metadata enrichment are currently disabled.
+Run checks locally and use `metadata_backfill.py` / `ingest/track_artists.py` manually
+when historical metadata needs reconciliation. The Edge Function already saves
+album artwork, track duration, catalogue IDs and every credited artist returned
+with each new play; it does not fetch artist genres for the historical archive.
+
+### Production polling contract
+
+- Poll every two minutes with `limit=50`. This is a page limit, not 50 new database
+  rows per run. Existing plays are reconciled instead of counted twice.
+- Start from the latest available page without an `after` filter. Comparing only
+  against the latest recorded timestamp can miss offline plays uploaded later
+  with older playback timestamps.
+- Follow Spotify's `before` cursor. Normal runs stop after two pages overlap the
+  database watermark; all runs stop at the lookback boundary, an empty or stalled
+  page, or 20 pages. The page cap limits requests, not guaranteed recoverable history.
+- Keep a daily recovery scan at 06:15 Istanbul, ignoring the watermark shortcut.
+  It uses the same bounded lookback and cannot restore history Spotify withholds.
+- Use Extended Streaming History imports for older gaps and measured listening
+  duration. The Web API supplies track length, not actual time listened or complete
+  skip/privacy flags.
 
 Spotify's response includes a `before` cursor and `next` URL, but live validation
 for this account currently returns an empty second page after the newest 50
@@ -262,9 +282,9 @@ python3 ingest/supabase_tracker.py --activate
 
 Activation checks absent/invalid auth, a read-only dry run and two live calls
 before creating cron schedules. Observe at least two scheduled successful runs
-before removing the schedule block in .github/workflows/main.yml. Leave manual
-workflow_dispatch available for recovery. Existing metadata enrichment/CI jobs
-remain separate.
+before removing the schedule block in .github/workflows/main.yml. The repository's
+Actions are now disabled; its manual workflow and metadata/CI definitions are
+retained only for a future opt-in fallback.
 
 The handler uses a 150-second expiring lease and the Python writer's advisory
 transaction lock. Duplicate/rounded timestamps of the same track are reconciled;
