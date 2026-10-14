@@ -280,9 +280,9 @@ project's storage bounded. Listening history is never deleted by that job.
 Checks:
 
 ```sh
-deno check supabase/functions/spotify-sync/index.ts
-deno test --allow-env supabase/functions/spotify-sync/core_test.ts
-MUSIC_TEST_DATABASE=1 deno test --env-file=.env --allow-env --allow-net supabase/functions/spotify-sync/storage_test.ts
+deno check --config supabase/functions/spotify-sync/deno.json supabase/functions/spotify-sync/index.ts
+deno test --config supabase/functions/spotify-sync/deno.json --allow-env supabase/functions/spotify-sync/core_test.ts
+MUSIC_TEST_DATABASE=1 deno test --config supabase/functions/spotify-sync/deno.json --env-file=.env --allow-env --allow-net supabase/functions/spotify-sync/storage_test.ts
 ```
 
 The SQL test writes only temporary tables. Its fixtures never enter the archive.

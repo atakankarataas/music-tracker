@@ -60,5 +60,5 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: "2.9.6"
-      - run: deno check supabase/functions/spotify-sync/index.ts
-      - run: deno test --allow-env supabase/functions/spotify-sync/core_test.ts
+      - run: deno check --config supabase/functions/spotify-sync/deno.json supabase/functions/spotify-sync/index.ts
+      - run: deno test --config supabase/functions/spotify-sync/deno.json --allow-env supabase/functions/spotify-sync/core_test.ts
