@@ -202,8 +202,10 @@ collaborations. Missing catalogue credits fall back to the recorded artist.
 
 Wrapped opens on the current year (2026 today) and ranks artists by plays only.
 Each credited artist receives one full play; overall totals count each listen
-once. It shares one eligible-window query for rankings, monthly activity and
-listening stories, with a 60-second aggregate cache keyed by exact dates.
+once. It uses one query for rankings and monthly activity and reads live data on every
+server render. Its counts include the same recorded plays as Library’s View all
+links, including private listening. The year picker navigates immediately, and
+Refresh fetches the latest database values without changing the year.
 Overview opens with the last 30 days selected.
 
 Wrapped's 1 January–12 November window is an estimate: Spotify publishes
@@ -219,9 +221,10 @@ python3 ingest/migrate.py
 python3 ingest/backfill_privacy.py
 ```
 
-Wrapped rankings exclude known Private Sessions and measured plays <=30s.
-Unknown privacy/duration remain provisionally included, as disclosed on the page.
-Normal archive browsing includes private sessions. The archive stores eligible
+Wrapped and normal archive browsing include the same private and short API
+records. Wrapped is a yearly archive recap, not a reproduction of Spotify’s
+privacy/content filters. Export import still admits music records >=30s; known
+short API records remain in the archive with their measured duration. The archive stores eligible
 music plays, so its duration subtotal cannot reproduce official total minutes
 (which also include short plays and other content). Taste Profile exclusions
 and Spotify's content filters cannot be reconstructed from this archive.

@@ -40,29 +40,29 @@ if (process.env.MUSIC_TEST_DATABASE !== '1') {
         const mod = new Module(filename,module); mod.paths=module.paths;
         mod._compile(ts.transpileModule(fs.readFileSync(filename,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText,filename);
         Module._load = original;
-        const {loadWrappedData} = mod.exports;
+        const {getWrappedData: loadWrappedData} = mod.exports;
         const data = await loadWrappedData('2000-01-01','2000-01-31');
-        assert.deepEqual(data.topArtists.map(a=>[a.name,a.plays]),[['Guest',3],['Lead',3],['Fallback',1]]);
-        assert.equal(data.totalPlays,4); // Do not double-count collaborations in total plays.
+        assert.deepEqual(data.topArtists.map(a=>[a.name,a.plays]),[['Guest',6],['Lead',6],['Fallback',1]]);
+        assert.equal(data.totalPlays,7); // Do not double-count collaborations in total plays.
         assert.equal(data.artists,3);
         assert.equal(data.tracks,2);
-        assert.equal(data.activeDays,4);
-        assert.equal(data.longestStreak,3);
-        assert.deepEqual(data.activity,[{label:'Jan 00',value:4}]);
-        assert.equal(data.dayparts.reduce((n,p)=>n+p.value,0),4);
-        assert.deepEqual(data.topTracks.map(t=>t.plays),[3,1]);
-        assert.deepEqual(data.topAlbums.map(t=>t.plays),[3,1]);
+        assert.equal(data.activeDays,7);
+        assert.equal(data.longestStreak,7);
+        assert.deepEqual(data.activity,[{label:'Jan 00',value:7}]);
+        assert.equal(data.dayparts.reduce((n,p)=>n+p.value,0),7);
+        assert.deepEqual(data.topTracks.map(t=>t.plays),[6,1]);
+        assert.deepEqual(data.topAlbums.map(t=>t.plays),[6,1]);
         // Istanbul winter midnight in 2000 is 22:00 UTC the previous day.
         await tx`INSERT INTO scrobbles (spotify_id,artist_name,ms_played,incognito_mode,played_at) VALUES
           ('duet','Lead',60000,false,'1999-12-31T22:00Z'),
           ('duet','Lead',60000,false,'1999-12-31T21:59:59Z'),
           ('duet','Lead',60000,false,'2000-01-31T22:00Z')`;
-        assert.equal((await loadWrappedData('2000-01-01','2000-01-31')).totalPlays,5);
+        assert.equal((await loadWrappedData('2000-01-01','2000-01-31')).totalPlays,8);
         const empty = await loadWrappedData('1990-01-01','1990-02-28');
         assert.equal(empty.totalPlays,0); assert.deepEqual(empty.topArtists,[]);
         assert.equal(empty.longestStreak,0); assert.equal(empty.activeDays,0);
         assert.deepEqual(empty.activity,[{label:'Jan 90',value:0},{label:'Feb 90',value:0}]);
-        console.log('SQL regression tests passed: full joint credits, duplicate metadata, missing metadata, private/short plays, unknown fields, Istanbul bounds, streaks, monthly totals and empty ranges.');
+        console.log('SQL regression tests passed: full joint credits, duplicate metadata, missing metadata, Library-equivalent private/short counts, fresh reads, unknown fields, Istanbul bounds, streaks, monthly totals and empty ranges.');
       });
     } finally {await sql.end();}
   })().catch(e=>{console.error(e.code ?? e.name,e.message);process.exitCode=1;});

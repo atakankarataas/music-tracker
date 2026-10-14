@@ -2,7 +2,8 @@
 .topline>span {display:flex;gap:8px;align-items:center;}
 .yearPicker {display:flex;align-items:center;gap:10px;letter-spacing:normal;}
 .yearPicker select,.yearPicker button {padding:9px 12px;background:var(--surface);color:var(--text-primary);border:1px solid var(--border-subtle);border-radius:8px;}
-.yearPicker button {cursor:pointer;}
+.yearPicker button {display:inline-flex;align-items:center;gap:7px;cursor:pointer;}
+.yearPicker :disabled {opacity:.6;cursor:wait;}
 .hero {position:relative;isolation:isolate;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,300px);align-items:center;gap:28px;padding:28px 32px 38px;overflow:hidden;min-height:280px;border:1px solid #d7ed9b36;border-radius:20px;background:radial-gradient(ellipse at 90% 10%,#52634155,transparent 55%),#20261e;}
 .heroCopy {position:relative;z-index:1;}
 .heroCopy>p {font-size:10px;letter-spacing:.17em;color:#d7ed9b;}

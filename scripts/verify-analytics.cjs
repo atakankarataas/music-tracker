@@ -12,12 +12,18 @@ function load(filename) {
 Module._load = (request,...rest) => request==='server-only' ? {} : request==='next/cache' ? {unstable_cache:fn=>fn} : request.startsWith('@/') ? load(path.resolve(request.slice(2)+'.ts')) : original(request,...rest);
 (async()=>{
   try {
-    const {loadWrappedData}=load(path.resolve('lib/wrapped.ts'));
+    const {getWrappedData:loadWrappedData}=load(path.resolve('lib/wrapped.ts'));
     const {getHomePeriodData}=load(path.resolve('lib/home-features.ts'));
     const {getLegacyLibraryData}=load(path.resolve('lib/legacy-features.ts'));
+    const {wrappedRange}=load(path.resolve('lib/periods.ts'));
     for(const year of [2023,2024,2025,2026]) {
       const started=performance.now();
-      const result=await loadWrappedData(`${year}-01-01`,`${year}-11-12`);
+      const {start,end}=wrappedRange(String(year));
+      const result=await loadWrappedData(start,end);
+      const reference=await getLegacyLibraryData({mode:'artists',period:'custom',start,end});
+      assert.deepEqual(result.topArtists.slice(0,10).map(a=>[a.name,a.plays]),reference.items.slice(0,10).map(a=>[a.title,a.count]),`Wrapped ${year} top ten must match View all`);
+      const homeReference=await getHomePeriodData('custom',start,end);
+      assert.equal(result.totalPlays,homeReference.totalPlays,`Wrapped ${year} total must match the archive window`);
       console.log(year,JSON.stringify({artists:result.topArtists.slice(0,5).map(a=>a.name),total:result.totalPlays,ms:Math.round(performance.now()-started)}));
     }
     const home=await getHomePeriodData('custom','2026-01-01','2026-09-28');

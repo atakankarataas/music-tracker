@@ -1,5 +1,4 @@
 import "server-only";
-import { unstable_cache } from "next/cache";
 import { sql } from "@/lib/db";
 import type { EntityItem, ChartPoint } from "@/lib/data";
 
@@ -17,7 +16,7 @@ export type WrappedData = {
   dayparts: ChartPoint[];
 };
 
-/** Scan the eligible window once and aggregate tracks before expanding credits.
+/** Scan the same archive window as Library once, then expand artist credits.
  * Each listed artist receives a full play; archive totals count the event once. */
 export async function loadWrappedData(start: string, end: string): Promise<WrappedData> {
   const [row] = await sql<WrappedData[]>`
@@ -27,7 +26,6 @@ export async function loadWrappedData(start: string, end: string): Promise<Wrapp
       FROM public.scrobbles
       WHERE played_at >= ${start}::date::timestamp AT TIME ZONE 'Europe/Istanbul'
         AND played_at < (${end}::date + 1)::timestamp AT TIME ZONE 'Europe/Istanbul'
-        AND (ms_played IS NULL OR ms_played > 30000) AND incognito_mode IS NOT TRUE
     ), track_plays AS MATERIALIZED (
       SELECT spotify_id, artist_name, track_name, count(*)::int AS n, max(image_url) AS image_url
       FROM plays GROUP BY spotify_id, artist_name, track_name
@@ -89,7 +87,6 @@ export async function loadWrappedData(start: string, end: string): Promise<Wrapp
   return row;
 }
 
-// Exact dates are part of Next's cache key, so day/year changes get fresh data.
-// Authentication remains enforced by the page middleware; this single archive
-// can share aggregate results across authenticated visits for at most a minute.
-export const getWrappedData = unstable_cache(loadWrappedData, ["wrapped-plays-v2"], { revalidate: 60 });
+// Read the current archive on every server render, just like Library. Caching
+// only this route let its top ten lag behind the live “View all” list.
+export const getWrappedData = loadWrappedData;
