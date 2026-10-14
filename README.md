@@ -182,8 +182,11 @@ The pre-migration custom-format dump is kept in the gitignored `backups/` direct
 
 - **Wrapped** (`/wrapped`): an estimated yearly recap, opening on the current year, separate from
   free calendar ranges. See the artist-credit and Wrapped methodology below.
-- **Discover** (`/discover`): forgotten favorites, monthly highlights, rising/new
-  artists, returning albums and a month picker for the musical time machine.
+- **Discover** (`/discover`): new-to-archive recommendations based on the last
+  30 days or this year, with a small underplayed familiar mix and refreshable picks.
+  Catalogue reads use existing client credentials, cache for six hours, have
+  five-second timeouts and respect rate-limit backoff. On an outage only
+  honestly labelled familiar archive picks are shown.
 - Monthly notes are stored in Postgres. Existing library saved filters remain
   available; `/` or Cmd/Ctrl+K opens search outside text inputs.
 - Playlist export previews the selection before creating a private Spotify playlist.
@@ -202,10 +205,8 @@ Genre and mood labels are approximate metadata, not audio analysis.
 
 ### Wrapped stories and deeper insights
 
-Wrapped now includes an album-cover collage, archive-year picker, artist podium,
-five keyboard-accessible story cards and a local PNG download. Recaps use the
-explicitly estimated Wrapped window; free date selection remains in the archive. Downloads do not
-upload or automatically share listening data.
+Wrapped includes a compact album-cover collage, archive-year picker, artist podium,
+and three side-by-side top-ten lists. Free date selection remains in the archive.
 
 Insights adds 30/90/365-day windows for streaks, artists first seen in the archive,
 repeat-play share, top-five artist concentration, six-hour listening windows,
@@ -217,25 +218,20 @@ first ever heard by the listener.
 
 ### Artist credits and Wrapped estimates
 
-Normal home/library rankings credit each catalogue artist in full; total plays
-still count each listening event once. Artist filters and detail pages include
-collaborations. Missing catalogue credits fall back to the recorded artist.
+Every page reads the same `music_read` model: Overview, Wrapped, Library,
+Search, Insights and artist details. Artist counts and sorting give the first
+catalogue artist 1, other credited artists 0.35. Round only on display and label
+all counts “plays”. Listening/track totals count each event once; artist totals
+overlap. Missing credits fall back to the recorded artist. Spotify publishes
+primary > secondary/featured but no coefficients or billing roles. Catalogue
+position is an estimate; matching 2023–2025 top-five lists is not proof of its formula.
 
-Wrapped opens on the current year and ranks artists by estimated Spotify-style
-weighted streams: first catalogue artist 1, other artists 0.35. Spotify publishes
-only that primary artists receive more weight, not its coefficients or billing
-roles. Catalogue order is our role proxy. The estimate matches the supplied
-2023–2025 top-five rankings; that calibration is not proof of Spotify's formula.
-Artist counts and order both use the same estimated weighted plays, including
-fractional contributions. Raw artist counts are not mixed into the Wrapped list.
-
-Known streams of 30 seconds or less and known private sessions are excluded from
-Wrapped rankings. API records with unknown listening duration are included;
-Extended History imports supply measured duration and reconcile skipped plays
-with their export timestamps. Normal Overview and Library date ranges retain
-unweighted archive counts. Wrapped's View all links carry `ranking=wrapped` and
-share the eligibility and weighting rules; changing the date range exits that
-model. Reads remain uncached so fresh data appears on reload or Refresh.
+Known streams of 30 seconds or less and private sessions are excluded globally;
+unknown API duration remains eligible. Extended History imports reconcile duration
+and skipped plays at export timestamps. Raw records stay untouched.
+`ranking=wrapped` is date-range context only, not a different metric. Live views
+avoid duplicating materialized storage and independently stale snapshots.
+Analytics reads are uncached; only recommendation catalogue data is cached.
 
 The 1 January–12 November window is an estimate of Spotify's published
 "mid-November" cutoff. Taste Profile exclusions and historical billing roles are
@@ -246,6 +242,8 @@ Read-only parity/reference check (local credentials and screenshots stay private
 
 ```sh
 NODE_ENV=production node --env-file=.env scripts/test-wrapped.cjs
+NODE_ENV=production node --env-file=.env scripts/test-listening.cjs
+TEST_SPOTIFY_CATALOG=1 NODE_ENV=production node --env-file=.env scripts/test-recommendations.cjs
 ```
 
 ## Supabase tracker deployment

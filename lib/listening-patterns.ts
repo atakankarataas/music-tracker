@@ -14,27 +14,31 @@ export async function getListeningPatterns(start: string | null, end: string, wr
     WITH plays AS MATERIALIZED (
       SELECT *, (played_at AT TIME ZONE 'Europe/Istanbul')::date AS day,
         extract(hour FROM played_at AT TIME ZONE 'Europe/Istanbul')::int AS hour
-      FROM public.scrobbles
+      FROM music_read.scrobbles
       WHERE (${start}::date IS NULL OR played_at >= ${start}::date::timestamp AT TIME ZONE 'Europe/Istanbul')
         AND played_at < (${end}::date+1)::timestamp AT TIME ZONE 'Europe/Istanbul'
         AND (${!wrapped} OR ((ms_played IS NULL OR ms_played > 30000) AND incognito_mode IS NOT TRUE))
+    ), credited AS MATERIALIZED (
+      SELECT a.* FROM music_read.artist_plays a JOIN plays p ON p.id=a.id
+    ), leaders AS (
+      SELECT artist_name FROM credited GROUP BY artist_name ORDER BY sum(play_weight) DESC,artist_name LIMIT 5
     ), days AS (
       SELECT day,count(*)::int AS plays FROM plays GROUP BY day
     ), islands AS (
       SELECT day, day - row_number() OVER (ORDER BY day)::int AS island FROM days
     ), first_artists AS (
-      SELECT artist_name,min(played_at) AS first_play FROM public.scrobbles GROUP BY artist_name
+      SELECT artist_name,min(played_at) AS first_play FROM music_read.artist_plays GROUP BY artist_name
     ), parts AS (
       SELECT CASE WHEN hour<6 THEN 0 WHEN hour<12 THEN 1 WHEN hour<18 THEN 2 ELSE 3 END AS part,
         count(*)::int AS value FROM plays GROUP BY 1
     )
-    SELECT count(*)::int AS total, count(DISTINCT artist_name)::int AS artists,
+    SELECT count(*)::int AS total, (SELECT count(DISTINCT artist_name)::int FROM credited) AS artists,
       count(DISTINCT coalesce(spotify_id,track_name||' / '||artist_name))::int AS tracks,
       (SELECT count(*)::int FROM days) AS active_days,
       coalesce((SELECT max(length)::int FROM (SELECT count(*) AS length FROM islands GROUP BY island) streaks),0) AS longest_streak,
       (SELECT count(*)::int FROM first_artists WHERE (${start}::date IS NULL OR first_play >= ${start}::date::timestamp AT TIME ZONE 'Europe/Istanbul')
         AND first_play < (${end}::date+1)::timestamp AT TIME ZONE 'Europe/Istanbul') AS new_artists,
-      coalesce((SELECT sum(n)::int FROM (SELECT count(*) AS n FROM plays GROUP BY artist_name ORDER BY n DESC LIMIT 5) leaders),0) AS top_five,
+      (SELECT count(DISTINCT id)::int FROM credited WHERE artist_name IN (SELECT artist_name FROM leaders)) AS top_five,
       (SELECT day::text FROM days ORDER BY plays DESC,day DESC LIMIT 1) AS peak_day,
       coalesce((SELECT max(plays) FROM days),0) AS peak_plays,
       count(ms_played)::int AS timed_plays, coalesce(round(sum(ms_played)/60000.0),0)::int AS known_minutes,

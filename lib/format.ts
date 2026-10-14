@@ -1,4 +1,4 @@
-export const numberFormatter = new Intl.NumberFormat("en-US");
+export const numberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
 
 export function formatNumber(value: number | string | null | undefined) {
   return numberFormatter.format(Number(value ?? 0));

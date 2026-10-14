@@ -11,5 +11,5 @@ export function wrappedEligibility() {
 }
 
 export function wrappedCreditWeight() {
-  return sql`CASE WHEN c.position IS NULL OR c.position = 0 THEN 1.0 ELSE ${WRAPPED_SECONDARY_WEIGHT}::numeric END`;
+  return sql`music_read.artist_credit_weight(c.position::smallint)`;
 }

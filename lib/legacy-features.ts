@@ -1,6 +1,5 @@
 import "server-only";
 
-import { unstable_cache } from "next/cache";
 
 import { sql } from "@/lib/db";
 
@@ -132,7 +131,7 @@ async function loadLegacyHomeFeatures(
           WHERE day >= month_bounds.previous_start
             AND day <= month_bounds.previous_start + month_bounds.days_elapsed
         ), 0)::int AS previous_count
-      FROM public.mv_music_daily_counts
+      FROM music_read.mv_music_daily_counts
       CROSS JOIN month_bounds
       WHERE day >= month_bounds.previous_start
         AND day <= month_bounds.today
@@ -148,7 +147,7 @@ async function loadLegacyHomeFeatures(
           extract(year FROM local_now.value)::int -
           extract(year FROM scrobbles.played_at AT TIME ZONE ${DISPLAY_TIME_ZONE})::int
         ) AS years_ago
-      FROM public.scrobbles
+      FROM music_read.scrobbles
       CROSS JOIN local_now
       WHERE extract(month FROM scrobbles.played_at AT TIME ZONE ${DISPLAY_TIME_ZONE}) =
               extract(month FROM local_now.value)
@@ -186,11 +185,11 @@ async function loadLegacyHomeFeatures(
         heatmap_days.day,
         COALESCE(daily.plays, 0)::int AS count
       FROM heatmap_days
-      LEFT JOIN public.mv_music_daily_counts daily USING (day)
+      LEFT JOIN music_read.mv_music_daily_counts daily USING (day)
     ),
     top_genres AS (
       SELECT genre AS name, count(*)::int AS count
-      FROM public.scrobbles
+      FROM music_read.scrobbles
       CROSS JOIN LATERAL unnest(scrobbles.artist_genres) AS genre
       WHERE scrobbles.artist_genres IS NOT NULL
         AND nullif(btrim(genre), '') IS NOT NULL
@@ -200,7 +199,7 @@ async function loadLegacyHomeFeatures(
     ),
     top_moods AS (
       SELECT mood_label AS name, count(*)::int AS count
-      FROM public.scrobbles
+      FROM music_read.scrobbles
       WHERE nullif(btrim(mood_label), '') IS NOT NULL
         -- "Mixed" is what infer_mood() returns when none of its keywords match,
         -- so it is a fallthrough rather than a mood. It accounted for 76% of
@@ -218,7 +217,7 @@ async function loadLegacyHomeFeatures(
         count(*) FILTER (
           WHERE nullif(btrim(mood_label), '') IS NOT NULL AND mood_label <> 'Mixed'
         )::int AS mood_plays
-      FROM public.scrobbles
+      FROM music_read.scrobbles
     )
     SELECT
       month_counts.current_count,
@@ -361,9 +360,9 @@ async function loadLegacyInsightsFeatures(): Promise<LegacyInsightsFeatures> {
             'count', COALESCE(hour_counts.plays, 0)::int
           ) ORDER BY hours.hour)
           FROM hours
-          LEFT JOIN public.mv_music_hour_counts hour_counts USING (hour)
+          LEFT JOIN music_read.mv_music_hour_counts hour_counts USING (hour)
         ), '[]'::json) AS clock
-      FROM public.mv_music_totals totals
+      FROM music_read.mv_music_totals totals
     `;
 
     const totalPlays = Number(row?.total_plays ?? 0);
@@ -393,17 +392,7 @@ async function loadLegacyInsightsFeatures(): Promise<LegacyInsightsFeatures> {
     };
 }
 
-const getCachedLegacyInsightsFeatures = unstable_cache(
-  loadLegacyInsightsFeatures,
-  ["legacy-insights-features-v2"],
-  { revalidate: 300, tags: ["listening-history"] },
-);
-
-export function getLegacyInsightsFeatures() {
-  return process.env.NODE_ENV === "development"
-    ? loadLegacyInsightsFeatures()
-    : getCachedLegacyInsightsFeatures();
-}
+export const getLegacyInsightsFeatures = loadLegacyInsightsFeatures;
 
 export type LegacyEntityKind = "artist" | "album" | "track";
 
@@ -460,10 +449,11 @@ export async function getEntityLegacyFeatures(
   const cleanValue = value.trim();
   if (!cleanValue) return null;
 
+  const entitySource = kind === "artist" ? sql`music_read.artist_plays` : sql`music_read.scrobbles`;
   const entityPredicate = kind === "artist"
     ? byId
-      ? sql`(artist_id = ${cleanValue} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_id=${cleanValue}))`
-      : sql`(artist_name = ${cleanValue} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name=${cleanValue}))`
+      ? sql`artist_id = ${cleanValue}`
+      : sql`artist_name = ${cleanValue}`
     : kind === "album"
       ? byId ? sql`album_id = ${cleanValue}` : sql`album_name = ${cleanValue}`
       : byId ? sql`spotify_id = ${cleanValue}` : sql`track_name = ${cleanValue}`;
@@ -472,14 +462,14 @@ export async function getEntityLegacyFeatures(
   const [row] = await sql<EntityFeaturesRow[]>`
     WITH filtered AS (
       SELECT
-        played_at,
+        id, play_weight, played_at,
         played_at AT TIME ZONE ${DISPLAY_TIME_ZONE} AS local_at,
         (played_at AT TIME ZONE ${DISPLAY_TIME_ZONE})::date AS local_day
-      FROM public.scrobbles
+      FROM ${entitySource} scrobbles
       WHERE ${entityPredicate}
     ),
     numbered AS (
-      SELECT *, row_number() OVER (ORDER BY played_at ASC) AS play_number
+      SELECT *, sum(play_weight) OVER (ORDER BY played_at ASC,id ASC) AS play_number
       FROM filtered
     ),
     targets AS (
@@ -487,7 +477,7 @@ export async function getEntityLegacyFeatures(
     ),
     stats AS (
       SELECT
-        count(*)::bigint AS total_plays,
+        sum(play_weight)::double precision AS total_plays,
         min(played_at) AS first_play,
         max(played_at) AS last_play,
         min(local_at) AS first_local,
@@ -529,7 +519,7 @@ export async function getEntityLegacyFeatures(
           'time', to_char(numbered.local_at, 'HH24:MI')
         ) ORDER BY targets.goal)
         FROM targets
-        JOIN numbered ON numbered.play_number = targets.goal
+        JOIN LATERAL (SELECT * FROM numbered WHERE play_number >= targets.goal ORDER BY played_at,id LIMIT 1) numbered ON true
       ), '[]'::json) AS achievements
     FROM stats
   `;
@@ -869,7 +859,7 @@ async function getLibraryPage(
   const filterPredicate = !filter
     ? sql``
     : filter.type === "artist"
-      ? sql`AND (artist_name = ${filter.value} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name=${filter.value}))`
+      ? sql`AND artist_name = ${filter.value}`
       : filter.type === "album"
         ? sql`AND album_name = ${filter.value}`
         : sql`AND track_name = ${filter.value}`;
@@ -898,7 +888,7 @@ async function getLibraryPage(
           spotify_id,
           album_id,
           played_at
-        FROM public.scrobbles
+        FROM ${filter?.type === "artist" ? sql`music_read.artist_plays` : sql`music_read.scrobbles`} scrobbles
         WHERE true ${datePredicate} ${filterPredicate} ${searchPredicate}
       ),
       ranked AS (
@@ -945,8 +935,8 @@ async function getLibraryPage(
         SELECT s.played_at,s.track_name,s.album_name,s.image_url,
           coalesce(c.artist_name,s.artist_name) AS artist_name,
           coalesce(c.artist_id,s.artist_id) AS artist_id,
-          ${wrapped ? wrappedCreditWeight() : sql`1.0`} AS credit_weight
-        FROM public.scrobbles s
+          ${wrappedCreditWeight()} AS credit_weight
+        FROM music_read.scrobbles s
         LEFT JOIN (
           SELECT spotify_id,artist_id,max(artist_name) AS artist_name,min(position) AS position
           FROM public.music_track_artists GROUP BY spotify_id,artist_id
@@ -983,7 +973,7 @@ async function getLibraryPage(
               album_id AS entity_id,
               album_id,
               last_play
-            FROM public.mv_music_album_totals
+            FROM music_read.mv_music_album_totals
             WHERE (${search} = '' OR album_name ILIKE ${term} OR artist_name ILIKE ${term})
           ),
           ranked AS (
@@ -1006,12 +996,12 @@ async function getLibraryPage(
             SELECT
               album_name AS title,
               artist_name AS subtitle,
-              count(*)::int AS play_count,
+              sum(play_weight)::double precision AS play_count,
               max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
               max(album_id) FILTER (WHERE album_id IS NOT NULL) AS entity_id,
               max(album_id) FILTER (WHERE album_id IS NOT NULL) AS album_id,
               max(played_at) AS last_play
-            FROM public.scrobbles
+            FROM ${filter?.type === "artist" ? sql`music_read.artist_plays` : sql`music_read.scrobbles`} scrobbles
             WHERE album_name IS NOT NULL ${datePredicate} ${filterPredicate} ${searchPredicate}
             GROUP BY album_id, album_name, artist_name
           ),
@@ -1045,7 +1035,7 @@ async function getLibraryPage(
             spotify_id AS entity_id,
             album_id,
             last_play
-          FROM public.mv_music_track_totals
+          FROM music_read.mv_music_track_totals
           WHERE (${search} = '' OR track_name ILIKE ${term} OR artist_name ILIKE ${term})
         ),
         ranked AS (
@@ -1068,12 +1058,12 @@ async function getLibraryPage(
           SELECT
             track_name AS title,
             artist_name AS subtitle,
-            count(*)::int AS play_count,
+            sum(play_weight)::double precision AS play_count,
             max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
             max(spotify_id) FILTER (WHERE spotify_id IS NOT NULL) AS entity_id,
             max(album_id) FILTER (WHERE album_id IS NOT NULL) AS album_id,
             max(played_at) AS last_play
-          FROM public.scrobbles
+          FROM ${filter?.type === "artist" ? sql`music_read.artist_plays` : sql`music_read.scrobbles`} scrobbles
           WHERE true ${datePredicate} ${filterPredicate} ${searchPredicate}
           GROUP BY spotify_id, track_name, artist_name
         ),
@@ -1124,7 +1114,7 @@ async function getLibraryChart(
   const filterPredicate = !filter
     ? sql``
     : filter.type === "artist"
-      ? sql`AND (artist_name = ${filter.value} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name=${filter.value}))`
+      ? sql`AND artist_name = ${filter.value}`
       : filter.type === "album"
         ? sql`AND album_name = ${filter.value}`
         : sql`AND track_name = ${filter.value}`;
@@ -1147,12 +1137,12 @@ async function getLibraryChart(
       SELECT (now() AT TIME ZONE ${DISPLAY_TIME_ZONE})::date AS today
     ),
     source AS (
-      SELECT (played_at AT TIME ZONE ${DISPLAY_TIME_ZONE})::date AS local_day
-      FROM public.scrobbles
+      SELECT play_weight, (played_at AT TIME ZONE ${DISPLAY_TIME_ZONE})::date AS local_day
+      FROM ${filter?.type === "artist" ? sql`music_read.artist_plays` : sql`music_read.scrobbles`} scrobbles
       WHERE true ${datePredicate} ${filterPredicate} ${searchPredicate}
     ),
     grouped AS (
-      SELECT ${labelExpression} AS label, count(*)::int AS value
+      SELECT ${labelExpression} AS label, sum(play_weight)::double precision AS value
       FROM source
       GROUP BY 1
       ORDER BY 1
@@ -1213,7 +1203,7 @@ async function getLibraryRelated(
         `;
   const datePredicate = sql`${baseDatePredicate} ${wrapped ? wrappedEligibility() : sql``}`;
   const filterPredicate = filter.type === "artist"
-    ? sql`(artist_name = ${filter.value} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name=${filter.value}))`
+    ? sql`artist_name = ${filter.value}`
     : filter.type === "album"
       ? sql`album_name = ${filter.value}`
       : sql`track_name = ${filter.value}`;
@@ -1221,7 +1211,7 @@ async function getLibraryRelated(
   const [row] = await sql<RelatedRow[]>`
     WITH filtered AS (
       SELECT *
-      FROM public.scrobbles
+      FROM ${filter?.type === "artist" ? sql`music_read.artist_plays` : sql`music_read.scrobbles`} scrobbles
       WHERE ${filterPredicate} ${datePredicate}
     ),
     -- These lists group on the same identity the detail pages use, rather than
@@ -1231,7 +1221,7 @@ async function getLibraryRelated(
     album_groups AS (
       SELECT
         max(album_name) AS title,
-        count(*)::int AS count,
+        sum(play_weight)::double precision AS count,
         max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
         max(album_id) FILTER (WHERE album_id IS NOT NULL) AS entity_id
       FROM filtered
@@ -1243,7 +1233,7 @@ async function getLibraryRelated(
     track_groups AS (
       SELECT
         max(track_name) AS title,
-        count(*)::int AS count,
+        sum(play_weight)::double precision AS count,
         max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
         max(spotify_id) FILTER (WHERE spotify_id IS NOT NULL) AS entity_id
       FROM filtered
@@ -1252,7 +1242,7 @@ async function getLibraryRelated(
       LIMIT 10
     )
     SELECT
-      count(*)::text AS count,
+      sum(play_weight)::text AS count,
       max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
       max(artist_name) AS artist_name,
       count(DISTINCT track_name)::text AS track_count,

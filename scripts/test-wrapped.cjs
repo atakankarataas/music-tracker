@@ -53,16 +53,17 @@ Module._load = (request, ...rest) => {
         assert.deepEqual(recap.topArtists.slice(0, 5).map(x => x.name), references[year].artists,
           `${year}: supplied Wrapped reference differs from estimate`);
       }
-      const raw = await getLegacyLibraryData({ mode: 'artists', period: 'custom', start, end });
-      const expected = await sql`WITH credits AS (
-        SELECT spotify_id,artist_id,max(artist_name) AS name FROM music_track_artists GROUP BY spotify_id,artist_id
-      ) SELECT coalesce(c.name,s.artist_name) AS name,count(*)::int AS plays
-      FROM scrobbles s LEFT JOIN credits c USING(spotify_id)
-      WHERE played_at >= ${start}::date::timestamp AT TIME ZONE 'Europe/Istanbul'
-        AND played_at < (${end}::date+1)::timestamp AT TIME ZONE 'Europe/Istanbul'
-      GROUP BY coalesce(c.name,s.artist_name) ORDER BY count(*) DESC,name LIMIT 10`;
-      assert.deepEqual(raw.items.slice(0, 10).map(x => [x.title,x.count]), expected.map(x => [x.name,x.plays]));
-      console.log(`${year}: weighted recap/View all agree; eligibility agrees; normal archive stays unweighted${references[year] ? '; reference top five matches' : ''}`);
+      const normal = await getLegacyLibraryData({ mode: 'artists', period: 'custom', start, end });
+      assert.deepEqual(normal.items.slice(0, 10).map(x => [x.title,x.count]), list.items.slice(0,10).map(x=>[x.title,x.count]));
+      const { getHomePeriodData } = load('lib/home-features.ts');
+      const home = await getHomePeriodData('custom',start,end);
+      assert.deepEqual(home.topArtists.map(x=>[x.name,x.plays]),recap.topArtists.slice(0,5).map(x=>[x.name,x.plays]));
+      assert.equal(home.totalPlays,recap.totalPlays);
+      const artist = recap.topArtists[0];
+      const filtered = await getLegacyLibraryData({mode:'tracks',period:'custom',start,end,filter:{type:'artist',value:artist.name}});
+      assert.equal(filtered.header.count,artist.plays);
+      assert.ok(Math.abs(filtered.chart.reduce((sum,x)=>sum+x.value,0)-artist.plays)<.00001);
+      console.log(`${year}: Overview, Wrapped, Library, artist filter and chart agree${references[year] ? '; reference top five matches' : ''}`);
     }
   } finally { await sql.end(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

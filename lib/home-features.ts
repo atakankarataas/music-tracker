@@ -82,7 +82,7 @@ async function loadHomePeriodData(
       SELECT
         CASE
           WHEN ${period} = 'all' THEN COALESCE(
-            (SELECT min((played_at AT TIME ZONE 'Europe/Istanbul')::date) FROM public.scrobbles),
+            (SELECT min((played_at AT TIME ZONE 'Europe/Istanbul')::date) FROM music_read.scrobbles),
             (now() AT TIME ZONE 'Europe/Istanbul')::date
           )
           ELSE ${customStart}::date
@@ -94,7 +94,7 @@ async function loadHomePeriodData(
     ),
     filtered AS MATERIALIZED (
       SELECT s.*
-      FROM public.scrobbles s
+      FROM music_read.scrobbles s
       CROSS JOIN bounds
       WHERE s.played_at >= bounds.start_day::timestamp AT TIME ZONE 'Europe/Istanbul'
         AND s.played_at < (bounds.end_day + 1)::timestamp AT TIME ZONE 'Europe/Istanbul'
@@ -109,24 +109,23 @@ async function loadHomePeriodData(
       FROM filtered
     ),
     archive AS (
-      -- The archive-wide headline never depends on the selected period, and the
-      -- totals rollup already keeps both values a few minutes fresh. Reading
-      -- them here avoids a second full pass over 148k rows on every cache miss.
+      -- The archive-wide headline uses the same live eligibility view as the
+      -- selected period, without an independently stale rollup snapshot.
       SELECT total_plays::bigint AS total_plays, first_play
-      FROM public.mv_music_totals
+      FROM music_read.mv_music_totals
     ),
     artist_credits AS (
       SELECT coalesce(c.artist_name,s.artist_name) AS name, s.image_url,
-        coalesce(c.artist_id,s.artist_id) AS id
+        coalesce(c.artist_id,s.artist_id) AS id, music_read.artist_credit_weight(c.position::smallint) AS credit_weight
       FROM filtered s
       LEFT JOIN (
-        SELECT spotify_id,artist_id,max(artist_name) AS artist_name
+        SELECT spotify_id,artist_id,max(artist_name) AS artist_name,min(position) AS position
         FROM public.music_track_artists GROUP BY spotify_id,artist_id
       ) c ON c.spotify_id=s.spotify_id
     ),
     artist_rank AS (
-      SELECT name, count(*)::int AS plays, max(image_url) AS "imageUrl", max(id) AS id
-      FROM artist_credits GROUP BY name ORDER BY count(*) DESC,name LIMIT 5
+      SELECT name, sum(credit_weight)::double precision AS plays, max(image_url) AS "imageUrl", max(id) AS id
+      FROM artist_credits GROUP BY name ORDER BY sum(credit_weight) DESC,name LIMIT 5
     ),
     album_rank AS (
       SELECT album_name AS name, artist_name AS secondary, count(*)::int AS plays,
@@ -176,7 +175,7 @@ async function loadHomePeriodData(
         FROM (
           SELECT track_name AS "trackName", artist_name AS "artistName",
             played_at::text AS "playedAt", image_url AS "imageUrl", spotify_id AS "spotifyId"
-          FROM public.scrobbles
+          FROM music_read.scrobbles
           ORDER BY played_at DESC
           LIMIT 10
         ) item

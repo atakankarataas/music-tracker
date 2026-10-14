@@ -24,7 +24,7 @@ export async function loadWrappedData(start: string, end: string): Promise<Wrapp
     WITH plays AS MATERIALIZED (
       SELECT spotify_id, artist_name, track_name, album_name, album_id, image_url,
         played_at AT TIME ZONE 'Europe/Istanbul' AS local_time
-      FROM public.scrobbles
+      FROM music_read.scrobbles
       WHERE played_at >= ${start}::date::timestamp AT TIME ZONE 'Europe/Istanbul'
         AND played_at < (${end}::date + 1)::timestamp AT TIME ZONE 'Europe/Istanbul'
         ${wrappedEligibility()}
@@ -74,7 +74,7 @@ export async function loadWrappedData(start: string, end: string): Promise<Wrapp
         coalesce(c.value,0) AS value FROM generate_series(0,3) AS series(part)
       LEFT JOIN daypart_counts c USING (part)
     )
-    SELECT (SELECT first_play::text FROM public.mv_music_totals LIMIT 1) AS "archiveFirstPlay",
+    SELECT (SELECT first_play::text FROM music_read.mv_music_totals LIMIT 1) AS "archiveFirstPlay",
       (SELECT count(*)::int FROM plays) AS "totalPlays",
       (SELECT count(*)::int FROM artists) AS artists,
       (SELECT count(DISTINCT coalesce(spotify_id, track_name || chr(31) || artist_name))::int FROM track_plays) AS tracks,

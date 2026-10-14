@@ -27,8 +27,8 @@ export async function GET() {
         (SELECT source FROM public.music_sync_runs ORDER BY started_at DESC LIMIT 1) AS tracker_source,
         (SELECT max(finished_at) > now() - CASE WHEN (SELECT source FROM public.music_sync_runs ORDER BY started_at DESC LIMIT 1)='supabase_edge' THEN interval '10 minutes' ELSE interval '90 minutes' END FROM public.music_sync_runs
           WHERE status IN ('success','warning')) AS sync_recent,
-        (SELECT max(played_at) FROM public.scrobbles) AS last_play,
-        (SELECT count(*)::text FROM public.scrobbles) AS total_plays
+        (SELECT max(played_at) FROM music_read.scrobbles) AS last_play,
+        (SELECT count(*)::text FROM music_read.scrobbles) AS total_plays
     `;
 
     const token = (await cookies()).get(COOKIE_NAME)?.value;

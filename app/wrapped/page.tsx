@@ -29,13 +29,13 @@ export default async function WrappedPage({ searchParams }: { searchParams: Prom
       <div className={styles.mosaic} aria-label="Albums that shaped your year">{data.topAlbums.slice(0, 9).map((album, i) => <div key={`${album.id}-${i}`}>{album.imageUrl ? <Image src={album.imageUrl} alt={`${album.name} — ${album.secondary}`} width={100} height={100} sizes="100px" priority={i < 3} /> : <Disc3 size={60} />}</div>)}{!data.topAlbums.length && <div className={styles.emptyCover}><Disc3 size={72} /><span>Your soundtrack starts here</span></div>}</div>
       <span className={styles.heroStamp}>VOL. {String(year).slice(-2)} / ATAKAN.FM</span>
     </header>
-    <section className="stats-grid"><StatTile label="Eligible plays" value={formatNumber(data.totalPlays)} /><StatTile label="Different artists" value={formatNumber(artistCount)} /><StatTile label="Tracks in rotation" value={formatNumber(data.tracks)} /><StatTile label="Days with music" value={formatNumber(data.activeDays)} /></section>
-    {!!topArtists.length && <section><div className={styles.sectionTitle}><span>THE ONES YOU CAME BACK TO</span><h2>Your main characters.</h2></div><div className={styles.podium}>{topArtists.slice(0, 3).map((item, i) => <Link href={artistHref(item.name)} className={styles.artist} key={item.name}><span className={styles.rank}>0{i + 1}</span><div><span>{i === 0 ? "YOUR HEADLINER" : "ON HEAVY ROTATION"}</span><h3>{item.name}</h3><p>{formatNumber(item.plays)} weighted plays</p></div><ArrowUpRight size={22} /></Link>)}</div></section>}
+    <section className="stats-grid"><StatTile label="Plays" value={formatNumber(data.totalPlays)} /><StatTile label="Different artists" value={formatNumber(artistCount)} /><StatTile label="Tracks in rotation" value={formatNumber(data.tracks)} /><StatTile label="Days with music" value={formatNumber(data.activeDays)} /></section>
+    {!!topArtists.length && <section><div className={styles.sectionTitle}><span>THE ONES YOU CAME BACK TO</span><h2>Your main characters.</h2></div><div className={styles.podium}>{topArtists.slice(0, 3).map((item, i) => <Link href={artistHref(item.name)} className={styles.artist} key={item.name}><span className={styles.rank}>0{i + 1}</span><div><span>{i === 0 ? "YOUR HEADLINER" : "ON HEAVY ROTATION"}</span><h3>{item.name}</h3><p>{formatNumber(item.plays)} plays</p></div><ArrowUpRight size={22} /></Link>)}</div></section>}
     <Surface><SectionHeader title="The shape of your year" detail="Every rise, every quiet month. Ranked by recorded plays." /><LineChart data={data.activity} /></Surface>
     <div id="year-rankings" className={styles.rankings}>
       <Surface>
-        <SectionHeader title="Top artists" detail="Estimated Spotify weighted plays" href={href("artists")} />
-        <EntityList items={topArtists.slice(0, 10)} kind="artist" valueLabel="weighted plays" itemHref={item => artistHref(item.name)} />
+        <SectionHeader title="Top artists" href={href("artists")} />
+        <EntityList items={topArtists.slice(0, 10)} kind="artist" valueLabel="plays" itemHref={item => artistHref(item.name)} />
       </Surface>
       <Surface>
         <SectionHeader title="Top songs" href={href("tracks")} />
@@ -47,6 +47,6 @@ export default async function WrappedPage({ searchParams }: { searchParams: Prom
         <EntityList items={data.topAlbums.slice(0, 10)} kind="album" />
       </Surface>
     </div>
-    <p className="feature-footnote">Artist order estimates Spotify’s weighted streams: first catalogue artist 1, other artists 0.35. Spotify does not publish its coefficients or billing roles; this estimate matches the supplied 2023–2025 top-five lists. Artist counts and order use the same estimated weighted plays. Known listens of 30 seconds or less and known private sessions are excluded; API listens have unknown duration. View all uses the same rules. The 12 November cutoff is an estimate. Taste Profile exclusions and Spotify’s album scoring are unavailable; albums here are ranked by plays. <a href="https://newsroom.spotify.com/2025-12-05/wrapped-methodology-explained/" target="_blank" rel="noreferrer">Spotify’s methodology ↗</a> · <Link href={`/?period=custom&start=${start}&end=${year}-12-31`}>Browse any date range ↗</Link></p>
+    <p className="feature-footnote">The 12 November cutoff is an estimate; Spotify publishes only “mid-November”. Albums are ranked by plays. <Link href={`/?period=custom&start=${start}&end=${year}-12-31`}>Browse any date range ↗</Link></p>
   </div>;
 }

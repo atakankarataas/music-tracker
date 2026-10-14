@@ -10,7 +10,7 @@
     "preview": "npm run build && npm run start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "node scripts/test-web.cjs && node scripts/test-playlist.cjs"
+    "test": "node scripts/test-web.cjs && node scripts/test-playlist.cjs && node scripts/test-recommendations.cjs"
   },
   "dependencies": {
     "lucide-react": "1.28.0",

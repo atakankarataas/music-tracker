@@ -1,34 +1,29 @@
 import Link from "next/link";
-import { getDiscovery } from "@/lib/discovery";
-import { EntityList,PageHeader,Surface,SectionHeader,StatTile } from "@/components/ui";
-import { PeriodNote } from "@/components/period-note";
-import { PlaylistExport } from "@/components/playlist-export";
-import { formatNumber } from "@/lib/format";
-export const dynamic="force-dynamic";
-export default async function DiscoverPage({searchParams}:{searchParams:Promise<{month?:string;spotify?:string}>}) {
-  const {month,spotify}=await searchParams;
-  const data=await getDiscovery(month);
-  const label=new Date(`${data.month}-01T12:00:00Z`).toLocaleDateString("en",{month:"long",year:"numeric"});
+import { ArrowUpRight, RefreshCw, Sparkles } from "lucide-react";
+import { getRecommendations } from "@/lib/recommendations";
+import { Artwork, PageHeader, Surface } from "@/components/ui";
+import styles from "./discover.module.css";
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Discover" };
+export default async function DiscoverPage({ searchParams }: { searchParams: Promise<{ period?: string; refresh?: string }> }) {
+  const params = await searchParams;
+  const period = params.period === "year" ? "year" : "30d";
+  const data = await getRecommendations(period, params.refresh);
   return <div className="page-stack">
-    <PageHeader eyebrow="A life in music" title="Find your next old favourite." description="Rediscover the songs you left behind, and the sounds that made a month yours." action={<Link className="quiet-link" href="/wrapped">Spotify Wrapped ↗</Link>} />
-    {spotify && <p role="status">{spotify === "setup" ? "Spotify playlist connection needs to be configured before connecting." : "Spotify connection was not completed. Please try again."}</p>}
-    <Surface className="discovery-hero"><SectionHeader title="Forgotten favourites" detail="At least 10 plays. Not heard in the last 180 days." />
-      <EntityList items={data.forgotten} kind="track" />
-      <PlaylistExport items={data.forgotten} name="atakan.fm · Forgotten favourites" />
-    </Surface>
-    <div className="month-picker"><div><span className="eyebrow">Time machine</span><h2>{label}</h2></div>
-      <form action="/discover"><label htmlFor="discovery-month">Choose a month</label><input id="discovery-month" name="month" type="month" defaultValue={data.month} min={data.first_month} max={data.today.slice(0,7)} required /><button type="submit">Travel back</button></form>
+    <PageHeader eyebrow="Discover" title="Your next favourite is out there." description="Fresh songs inspired by your listening, with a few familiar sounds worth another spin." />
+    <div className={styles.toolbar}>
+      <nav className={styles.periods} aria-label="Recommendation listening period">
+        <Link href="/discover?period=30d" prefetch={false} aria-current={period === "30d" ? "page" : undefined}>Last 30 days</Link>
+        <Link href="/discover?period=year" prefetch={false} aria-current={period === "year" ? "page" : undefined}>This year</Link>
+      </nav>
+      <Link className={styles.refresh} href={`/discover?period=${period}&refresh=${(data.refresh + 1) % 51}`} prefetch={false}><RefreshCw size={16} /> Refresh picks</Link>
     </div>
-    <section className="stats-grid">
-      <StatTile label="Plays this month" value={formatNumber(data.plays)} />
-      <StatTile label="Previous month, same days" value={formatNumber(data.previous_plays)} />
-      <StatTile label="Change in plays" value={`${data.plays-data.previous_plays>=0?"+":""}${formatNumber(data.plays-data.previous_plays)}`} />
-      <StatTile label="Verified listening minutes" value={data.timed_plays?formatNumber(Math.round(Number(data.known_ms)/60000)):"Not available"} detail={`${formatNumber(data.timed_plays)} of ${formatNumber(data.plays)} plays have export duration`} />
-    </section>
-    <div className="split-grid"><Surface><SectionHeader title="New to your world" detail="Artists first heard in this month" /><EntityList items={data.new_artists} kind="artist" /></Surface>
-      <Surface><SectionHeader title="On the rise" detail="More plays than the same days of the previous month" /><EntityList items={data.rising.map(item=>({...item,secondary:`${item.previous} → ${item.plays} plays`}))} kind="artist" /></Surface></div>
-    <div className="split-grid"><Surface><SectionHeader title="Albums you returned to" detail="A return after at least six months away before this month" /><EntityList items={data.returns} kind="album" /></Surface>
-      <Surface><SectionHeader title="The month's soundtrack" /><EntityList items={data.top_tracks} kind="track" /><PlaylistExport items={data.top_tracks} name={`atakan.fm · ${label}`} /></Surface></div>
-    <Surface><SectionHeader title="A note to your future self" detail={label} /><PeriodNote key={data.month} month={data.month} initial={data.note??""} /></Surface>
+    {data.seeds.length > 0 && <Surface className={styles.inspiration}><Sparkles size={20} /><div><span className="eyebrow">Inspired by your {period === "year" ? "year" : "recent listening"}</span><p>{data.seeds.slice(0, 5).map(seed => seed.name).join(" · ")}</p></div></Surface>}
+    {data.unavailable && <p role="status">Spotify’s catalogue is temporarily unavailable. Here are a few underplayed songs from your archive. Try refreshing for new discoveries.</p>}
+    {!data.picks.length ? <Surface><h2>{data.seeds.length ? "No fresh picks just yet." : "Your next chapter starts with a listen."}</h2><p>{data.seeds.length ? "Try the other period or refresh your picks." : "Once your listening is synced for this period, your recommendations will appear here."}</p></Surface> : <section className={styles.grid} aria-label="Recommended songs">{data.picks.map(track => <article className={styles.card} key={track.id}>
+      <a className={styles.cover} href={`https://open.spotify.com/track/${track.id}`} target="_blank" rel="noreferrer" aria-label={`Open ${track.name} in Spotify`}><Artwork src={track.imageUrl} kind="track" size={240} /><span><ArrowUpRight size={24} /></span></a>
+      <div className={styles.copy}><span className={styles.badge} data-familiar={track.familiar}>{track.familiar ? "Worth another listen" : "New to your archive"}</span><h2><a href={`https://open.spotify.com/track/${track.id}`} target="_blank" rel="noreferrer">{track.name}</a></h2><p>{track.artist}</p><small>{track.familiar ? "A familiar song you haven’t played much." : `Because you listen to ${track.seed}.`}</small></div>
+    </article>)}</section>}
+    <p className="feature-footnote">New means absent from your imported listening history. Picks update with your taste; open any song to listen on Spotify.</p>
   </div>;
 }

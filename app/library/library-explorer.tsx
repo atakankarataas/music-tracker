@@ -75,7 +75,7 @@ export type LibraryViewData = {
 type SavedFilter = Omit<LibraryState, "page">;
 
 const MODES: Array<{ value: LibraryMode; label: string }> = [
-  { value: "scrobbles", label: "Scrobbles" },
+  { value: "scrobbles", label: "Listening history" },
   { value: "artists", label: "Artists" },
   { value: "albums", label: "Albums" },
   { value: "tracks", label: "Tracks" },
@@ -306,11 +306,11 @@ export function LibraryExplorer({ data, state }: { data: LibraryViewData; state:
             </button>
           ) : <p className="eyebrow">Collection</p>}
           <h1>{data.headerInfo?.title ?? "Library"}</h1>
-          <p className="feature-footnote">{state.wrapped ? "Artist counts and order use the same estimated Spotify weighted plays. " : "Every credited artist receives one full play. "}Artist totals overlap; overall listening counts each play once. Missing catalogue credits fall back to the recorded artist.</p>
+          <p className="feature-footnote">Artist counts and order use the same calculation as every other page. Artist totals overlap; overall listening counts each play once. Missing catalogue credits fall back to the recorded artist.</p>
           <p className="page-description">
             {data.headerInfo
-              ? `${formatNumber(data.headerInfo.count)} scrobbles${data.headerInfo.trackCount ? ` · ${formatNumber(data.headerInfo.trackCount)} tracks` : ""}`
-              : state.wrapped ? "Wrapped eligible listens. Artist counts and order use estimated Spotify weighted plays." : "Every artist, album, track and scrobble in your listening archive."}
+              ? `${formatNumber(data.headerInfo.count)} plays${data.headerInfo.trackCount ? ` · ${formatNumber(data.headerInfo.trackCount)} tracks` : ""}`
+              : "Every artist, album, track and play in your listening archive."}
           </p>
         </div>
         {data.headerInfo ? (
@@ -434,7 +434,7 @@ export function LibraryExplorer({ data, state }: { data: LibraryViewData; state:
           <div className="library-section-heading">
             <div>
               <p className="eyebrow">{data.headerInfo?.subtitle ?? "Results"}</p>
-              <h2>{showRelated ? "Related listening" : state.mode === "scrobbles" ? "Scrobbles timeline" : `${state.mode[0].toUpperCase()}${state.mode.slice(1)}`}</h2>
+              <h2>{showRelated ? "Related listening" : state.mode === "scrobbles" ? "Listening history" : `${state.mode[0].toUpperCase()}${state.mode.slice(1)}`}</h2>
             </div>
             {!showRelated ? <span>{resultLabel}</span> : null}
           </div>
@@ -447,7 +447,7 @@ export function LibraryExplorer({ data, state }: { data: LibraryViewData; state:
               onViewAll={(mode) => navigate({ mode, page: 1 })}
             />
           ) : data.items.length ? (
-            <LibraryRows items={data.items} mode={state.mode} onFilter={applyEntityFilter} countLabel={state.wrapped && state.mode === "artists" ? "weighted plays" : "scrobbles"} />
+            <LibraryRows items={data.items} mode={state.mode} onFilter={applyEntityFilter} countLabel="plays" />
           ) : (
             <div className="library-empty">
               <Disc3 aria-hidden="true" size={22} strokeWidth={1.4} />
@@ -506,7 +506,7 @@ export function LibraryExplorer({ data, state }: { data: LibraryViewData; state:
               {data.chart.map((point, index) => (
                 <div key={`${point.label}-${index}`} role="listitem">
                   <button
-                    aria-label={`${point.label}, ${formatNumber(point.value)} scrobbles`}
+                    aria-label={`${point.label}, ${formatNumber(point.value)} plays`}
                     onBlur={() => setActiveChartPoint(null)}
                     onClick={() => {
                       const range = chartDateRange(point.label, data.chartMode);
@@ -541,7 +541,7 @@ function LibraryRows({
   items,
   mode,
   onFilter,
-  countLabel = "scrobbles",
+  countLabel = "plays",
 }: {
   items: LibraryItem[];
   mode: LibraryMode;

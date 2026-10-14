@@ -1,6 +1,5 @@
 import "server-only";
 
-import { unstable_cache } from "next/cache";
 
 import { sql } from "@/lib/db";
 
@@ -57,8 +56,8 @@ async function loadInsightsData() {
         ) ORDER BY hours.hour)
         FROM hours
         LEFT JOIN (
-          SELECT hour::int AS hour, plays::int AS plays
-          FROM public.mv_music_hour_counts
+          SELECT hour::int AS hour, plays::double precision AS plays
+          FROM music_read.mv_music_hour_counts
         ) counts USING (hour)) AS hourly,
         (SELECT json_agg(json_build_object(
           'label', weekdays.label,
@@ -66,8 +65,8 @@ async function loadInsightsData() {
         ) ORDER BY weekdays.day_number)
         FROM weekdays
         LEFT JOIN (
-          SELECT day_number::int AS day_number, plays::int AS plays
-          FROM public.mv_music_weekday_counts
+          SELECT day_number::int AS day_number, plays::double precision AS plays
+          FROM music_read.mv_music_weekday_counts
         ) counts USING (day_number)) AS weekdays,
         (SELECT json_agg(json_build_object(
           'label', to_char(months.month, 'Mon'),
@@ -76,7 +75,7 @@ async function loadInsightsData() {
         FROM months
         LEFT JOIN (
           SELECT date_trunc('month', day::timestamp) AS month, sum(plays)::int AS plays
-          FROM public.mv_music_daily_counts
+          FROM music_read.mv_music_daily_counts
           WHERE day >= date_trunc('month', (now() AT TIME ZONE 'Europe/Istanbul'))::date - interval '11 months'
           GROUP BY 1
         ) counts USING (month)) AS monthly,
@@ -86,8 +85,8 @@ async function loadInsightsData() {
         ) ORDER BY days.day)
         FROM days
         LEFT JOIN (
-          SELECT day, plays::int AS plays
-          FROM public.mv_music_daily_counts
+          SELECT day, plays::double precision AS plays
+          FROM music_read.mv_music_daily_counts
           WHERE day >= (now() AT TIME ZONE 'Europe/Istanbul')::date - 363
         ) counts USING (day)) AS heatmap
     `;
@@ -104,17 +103,7 @@ async function loadInsightsData() {
     };
 }
 
-// Key bumped because the heatmap window changed from 84 to 364 days.
-const getCachedInsightsData = unstable_cache(loadInsightsData, ["insights-v5"], {
-  revalidate: 300,
-  tags: ["listening-history"],
-});
-
-export async function getInsightsData() {
-  return process.env.NODE_ENV === "development"
-    ? loadInsightsData()
-    : getCachedInsightsData();
-}
+export const getInsightsData = loadInsightsData;
 
 export type DetailData = {
   kind: "artist" | "album" | "track";
@@ -162,17 +151,16 @@ function mapDetail(kind: DetailData["kind"], row: DetailRow): DetailData {
 export async function getArtistDetail(name: string): Promise<DetailData | null> {
   const [row] = await sql<DetailRow[]>`
     WITH filtered AS MATERIALIZED (
-      SELECT * FROM public.scrobbles s WHERE s.artist_name=${name}
-        OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=s.spotify_id AND c.artist_name=${name})
+      SELECT * FROM music_read.artist_plays s WHERE s.artist_name=${name}
     ), entity AS (
-      SELECT count(*) AS plays, max(image_url) AS image_url,
+      SELECT sum(play_weight) AS plays, max(image_url) AS image_url,
         min(played_at) AS first_play,max(played_at) AS last_play FROM filtered
     )
     SELECT ${name} AS title, NULL::text AS subtitle,entity.image_url,
       entity.plays::text AS total_plays,entity.first_play::text,entity.last_play::text,
       (SELECT count(DISTINCT (played_at AT TIME ZONE 'Europe/Istanbul')::date)::text FROM filtered) AS active_days,
       coalesce((SELECT json_agg(item ORDER BY item.plays DESC,item.name) FROM (
-        SELECT track_name AS name, max(artist_name) AS secondary,count(*)::int AS plays,
+        SELECT track_name AS name, max(artist_name) AS secondary,sum(play_weight)::double precision AS plays,
           max(image_url) AS "imageUrl",spotify_id AS id FROM filtered
         GROUP BY spotify_id,track_name ORDER BY plays DESC,name LIMIT 10
       ) item),'[]'::json) AS top_items,
@@ -181,7 +169,7 @@ export async function getArtistDetail(name: string): Promise<DetailData | null> 
           image_url AS "imageUrl",spotify_id AS "spotifyId" FROM filtered ORDER BY played_at DESC LIMIT 8
       ) item),'[]'::json) AS recent,
       coalesce((SELECT json_agg(json_build_object('label',to_char(day,'DD Mon'),'value',plays) ORDER BY day) FROM (
-        SELECT (played_at AT TIME ZONE 'Europe/Istanbul')::date AS day,count(*)::int AS plays
+        SELECT (played_at AT TIME ZONE 'Europe/Istanbul')::date AS day,sum(play_weight)::double precision AS plays
         FROM filtered WHERE played_at >= ((now() AT TIME ZONE 'Europe/Istanbul')::date-29)::timestamp AT TIME ZONE 'Europe/Istanbul'
         GROUP BY 1
       ) chart),'[]'::json) AS daily
@@ -196,7 +184,7 @@ export async function getAlbumDetail(
 ): Promise<DetailData | null> {
   const [row] = await sql<DetailRow[]>`
     WITH candidates AS (
-      SELECT * FROM public.mv_music_album_totals
+      SELECT * FROM music_read.mv_music_album_totals
       WHERE ${byId ? sql`album_id = ${value}` : sql`album_name = ${value}`}
     ),
     entity AS (
@@ -212,24 +200,24 @@ export async function getAlbumDetail(
       entity.plays::text AS total_plays,
       entity.first_play::text,
       entity.last_play::text,
-      (SELECT count(DISTINCT day)::text FROM public.mv_music_album_daily
+      (SELECT count(DISTINCT day)::text FROM music_read.mv_music_album_daily
        WHERE ${byId ? sql`album_id = ${value}` : sql`album_name = ${value}`}) AS active_days,
       COALESCE((SELECT json_agg(item ORDER BY item.plays DESC) FROM (
-        SELECT track_name AS name, artist_name AS secondary, plays::int AS plays,
+        SELECT track_name AS name, artist_name AS secondary, plays::double precision AS plays,
           image_url AS "imageUrl", spotify_id AS id
-        FROM public.mv_music_album_track_totals
+        FROM music_read.mv_music_album_track_totals
         WHERE ${byId ? sql`album_id = ${value}` : sql`album_name = ${value}`}
         ORDER BY plays DESC LIMIT 20
       ) item), '[]'::json) AS top_items,
       COALESCE((SELECT json_agg(item ORDER BY item."playedAt" DESC) FROM (
         SELECT track_name AS "trackName", artist_name AS "artistName",
           played_at::text AS "playedAt", image_url AS "imageUrl", spotify_id AS "spotifyId"
-        FROM public.scrobbles
+        FROM music_read.scrobbles
         WHERE ${byId ? sql`album_id = ${value}` : sql`album_name = ${value}`}
         ORDER BY played_at DESC LIMIT 8
       ) item), '[]'::json) AS recent,
       COALESCE((SELECT json_agg(json_build_object('label', to_char(day, 'DD Mon'), 'value', plays) ORDER BY day) FROM (
-        SELECT day, sum(plays)::int AS plays FROM public.mv_music_album_daily
+        SELECT day, sum(plays)::int AS plays FROM music_read.mv_music_album_daily
         WHERE ${byId ? sql`album_id = ${value}` : sql`album_name = ${value}`}
           AND day >= (now() AT TIME ZONE 'Europe/Istanbul')::date - 29
         GROUP BY day
@@ -245,7 +233,7 @@ export async function getTrackDetail(
 ): Promise<DetailData | null> {
   const [row] = await sql<DetailRow[]>`
     WITH candidates AS (
-      SELECT * FROM public.mv_music_track_totals
+      SELECT * FROM music_read.mv_music_track_totals
       WHERE ${byId ? sql`spotify_id = ${value}` : sql`track_name = ${value}`}
     ),
     entity AS (
@@ -261,18 +249,18 @@ export async function getTrackDetail(
       entity.plays::text AS total_plays,
       entity.first_play::text,
       entity.last_play::text,
-      (SELECT count(DISTINCT day)::text FROM public.mv_music_track_daily
+      (SELECT count(DISTINCT day)::text FROM music_read.mv_music_track_daily
        WHERE ${byId ? sql`spotify_id = ${value}` : sql`track_name = ${value}`}) AS active_days,
       '[]'::json AS top_items,
       COALESCE((SELECT json_agg(item ORDER BY item."playedAt" DESC) FROM (
         SELECT track_name AS "trackName", artist_name AS "artistName",
           played_at::text AS "playedAt", image_url AS "imageUrl", spotify_id AS "spotifyId"
-        FROM public.scrobbles
+        FROM music_read.scrobbles
         WHERE ${byId ? sql`spotify_id = ${value}` : sql`track_name = ${value}`}
         ORDER BY played_at DESC LIMIT 12
       ) item), '[]'::json) AS recent,
       COALESCE((SELECT json_agg(json_build_object('label', to_char(day, 'DD Mon'), 'value', plays) ORDER BY day) FROM (
-        SELECT day, sum(plays)::int AS plays FROM public.mv_music_track_daily
+        SELECT day, sum(plays)::int AS plays FROM music_read.mv_music_track_daily
         WHERE ${byId ? sql`spotify_id = ${value}` : sql`track_name = ${value}`}
           AND day >= (now() AT TIME ZONE 'Europe/Istanbul')::date - 29
         GROUP BY day
@@ -295,21 +283,21 @@ export async function searchEntities(query: string) {
   >`
     SELECT
       COALESCE((SELECT json_agg(item ORDER BY item.plays DESC) FROM (
-        SELECT artist_name AS name, plays::int AS plays,
+        SELECT artist_name AS name, plays::double precision AS plays,
           image_url AS "imageUrl", artist_id AS id
-        FROM public.mv_music_artist_totals WHERE artist_name ILIKE ${term}
+        FROM music_read.mv_music_artist_totals WHERE artist_name ILIKE ${term}
         ORDER BY plays DESC LIMIT 10
       ) item), '[]'::json) AS artists,
       COALESCE((SELECT json_agg(item ORDER BY item.plays DESC) FROM (
-        SELECT track_name AS name, artist_name AS secondary, plays::int AS plays,
+        SELECT track_name AS name, artist_name AS secondary, plays::double precision AS plays,
           image_url AS "imageUrl", spotify_id AS id
-        FROM public.mv_music_track_totals WHERE track_name ILIKE ${term} OR artist_name ILIKE ${term}
+        FROM music_read.mv_music_track_totals WHERE track_name ILIKE ${term} OR artist_name ILIKE ${term}
         ORDER BY plays DESC LIMIT 20
       ) item), '[]'::json) AS tracks,
       COALESCE((SELECT json_agg(item ORDER BY item.plays DESC) FROM (
-        SELECT album_name AS name, artist_name AS secondary, plays::int AS plays,
+        SELECT album_name AS name, artist_name AS secondary, plays::double precision AS plays,
           image_url AS "imageUrl", album_id AS id
-        FROM public.mv_music_album_totals
+        FROM music_read.mv_music_album_totals
         WHERE album_name ILIKE ${term} OR artist_name ILIKE ${term}
         ORDER BY plays DESC LIMIT 10
       ) item), '[]'::json) AS albums

@@ -238,10 +238,11 @@ async function loadDetailPeriodFeatures(
   const cleanValue = value.trim();
   if (!cleanValue) return null;
 
+  const entitySource = kind === "artist" ? sql`music_read.artist_plays` : sql`music_read.scrobbles`;
   const entityPredicate = kind === "artist"
     ? byId
-      ? sql`(artist_id = ${cleanValue} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_id=${cleanValue}))`
-      : sql`(artist_name = ${cleanValue} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name=${cleanValue}))`
+      ? sql`artist_id = ${cleanValue}`
+      : sql`artist_name = ${cleanValue}`
     : kind === "album"
       ? byId ? sql`album_id = ${cleanValue}` : sql`album_name = ${cleanValue}`
       : byId ? sql`spotify_id = ${cleanValue}` : sql`track_name = ${cleanValue}`;
@@ -275,6 +276,7 @@ async function loadDetailPeriodFeatures(
     ),
     entity AS MATERIALIZED (
       SELECT
+        play_weight,
         track_name,
         artist_name,
         album_name,
@@ -289,7 +291,7 @@ async function loadDetailPeriodFeatures(
         CASE WHEN album_name IS NULL THEN NULL
           ELSE COALESCE(album_id, md5(album_name || E'\\x1f' || artist_name))
         END AS album_key
-      FROM public.scrobbles
+      FROM ${entitySource} scrobbles
       WHERE ${entityPredicate}
     ),
     period_rows AS MATERIALIZED (
@@ -300,7 +302,7 @@ async function loadDetailPeriodFeatures(
         track_key,
         track_name,
         artist_name,
-        count(*)::int AS lifetime_plays,
+        sum(play_weight)::double precision AS lifetime_plays,
         max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
         max(spotify_id) FILTER (WHERE spotify_id IS NOT NULL) AS spotify_id,
         max(album_id) FILTER (WHERE album_id IS NOT NULL) AS album_id
@@ -308,7 +310,7 @@ async function loadDetailPeriodFeatures(
       GROUP BY track_key, track_name, artist_name
     ),
     period_track_groups AS (
-      SELECT track_key, count(*)::int AS period_plays
+      SELECT track_key, sum(play_weight)::double precision AS period_plays
       FROM period_rows
       GROUP BY track_key
     ),
@@ -316,7 +318,7 @@ async function loadDetailPeriodFeatures(
       SELECT
         lifetime.track_name,
         lifetime.artist_name,
-        COALESCE(period.period_plays, 0)::int AS period_plays,
+        COALESCE(period.period_plays, 0)::double precision AS period_plays,
         lifetime.lifetime_plays,
         lifetime.image_url,
         lifetime.spotify_id,
@@ -329,7 +331,7 @@ async function loadDetailPeriodFeatures(
         album_key,
         album_name,
         artist_name,
-        count(*)::int AS period_plays,
+        sum(play_weight)::double precision AS period_plays,
         max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
         max(album_id) FILTER (WHERE album_id IS NOT NULL) AS album_id
       FROM period_rows
@@ -337,13 +339,13 @@ async function loadDetailPeriodFeatures(
       GROUP BY album_key, album_name, artist_name
     ),
     lifetime_album_groups AS (
-      SELECT album_key, count(*)::int AS lifetime_plays
+      SELECT album_key, sum(play_weight)::double precision AS lifetime_plays
       FROM entity
       WHERE album_key IS NOT NULL
       GROUP BY album_key
     ),
     period_buckets AS (
-      SELECT ${bucketExpression} AS bucket, count(*)::int AS value
+      SELECT ${bucketExpression} AS bucket, sum(play_weight)::double precision AS value
       FROM period_rows
       GROUP BY 1
       ORDER BY 1
@@ -355,7 +357,7 @@ async function loadDetailPeriodFeatures(
         max(artist_id) FILTER (WHERE artist_id IS NOT NULL) AS artist_id,
         album_name,
         max(album_id) FILTER (WHERE album_id IS NOT NULL) AS album_id,
-        count(*) AS plays
+        sum(play_weight) AS plays
       FROM entity
       GROUP BY artist_name, album_name
       ORDER BY plays DESC, artist_name, album_name NULLS LAST
@@ -363,13 +365,13 @@ async function loadDetailPeriodFeatures(
     ),
     totals AS (
       SELECT
-        count(*)::text AS lifetime_plays,
+        sum(play_weight)::text AS lifetime_plays,
         min(local_day)::text AS first_local_day
       FROM entity
     ),
     period_stats AS (
       SELECT
-        count(*)::text AS period_plays,
+        sum(play_weight)::text AS period_plays,
         count(DISTINCT local_day)::int AS active_days,
         count(DISTINCT track_key)::int AS distinct_tracks,
         count(DISTINCT album_key) FILTER (WHERE album_key IS NOT NULL)::int AS distinct_albums
@@ -377,11 +379,11 @@ async function loadDetailPeriodFeatures(
     ),
     comparison AS (
       SELECT
-        count(*) FILTER (WHERE entity.played_at >= bounds.current_start)::int AS current_count,
-        count(*) FILTER (
+        sum(play_weight) FILTER (WHERE entity.played_at >= bounds.current_start)::double precision AS current_count,
+        sum(play_weight) FILTER (
           WHERE entity.played_at >= bounds.previous_start
             AND entity.played_at < bounds.current_start
-        )::int AS previous_count
+        )::double precision AS previous_count
       FROM entity
       CROSS JOIN bounds
     )
