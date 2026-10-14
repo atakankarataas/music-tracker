@@ -306,11 +306,11 @@ export function LibraryExplorer({ data, state }: { data: LibraryViewData; state:
             </button>
           ) : <p className="eyebrow">Collection</p>}
           <h1>{data.headerInfo?.title ?? "Library"}</h1>
-          <p className="feature-footnote">{state.wrapped ? "Displayed artist counts include each eligible credited play; the ranking applies estimated Spotify weighting. " : "Every credited artist receives one full play. "}Artist totals overlap; overall listening counts each play once. Missing catalogue credits fall back to the recorded artist.</p>
+          <p className="feature-footnote">{state.wrapped ? "Artist counts and order use the same estimated Spotify weighted plays. " : "Every credited artist receives one full play. "}Artist totals overlap; overall listening counts each play once. Missing catalogue credits fall back to the recorded artist.</p>
           <p className="page-description">
             {data.headerInfo
               ? `${formatNumber(data.headerInfo.count)} scrobbles${data.headerInfo.trackCount ? ` · ${formatNumber(data.headerInfo.trackCount)} tracks` : ""}`
-              : state.wrapped ? "Wrapped eligible listens. Artist order uses estimated Spotify weighting; counts show plays." : "Every artist, album, track and scrobble in your listening archive."}
+              : state.wrapped ? "Wrapped eligible listens. Artist counts and order use estimated Spotify weighted plays." : "Every artist, album, track and scrobble in your listening archive."}
           </p>
         </div>
         {data.headerInfo ? (
@@ -447,7 +447,7 @@ export function LibraryExplorer({ data, state }: { data: LibraryViewData; state:
               onViewAll={(mode) => navigate({ mode, page: 1 })}
             />
           ) : data.items.length ? (
-            <LibraryRows items={data.items} mode={state.mode} onFilter={applyEntityFilter} />
+            <LibraryRows items={data.items} mode={state.mode} onFilter={applyEntityFilter} countLabel={state.wrapped && state.mode === "artists" ? "weighted plays" : "scrobbles"} />
           ) : (
             <div className="library-empty">
               <Disc3 aria-hidden="true" size={22} strokeWidth={1.4} />
@@ -541,10 +541,12 @@ function LibraryRows({
   items,
   mode,
   onFilter,
+  countLabel = "scrobbles",
 }: {
   items: LibraryItem[];
   mode: LibraryMode;
   onFilter: (mode: Exclude<LibraryMode, "scrobbles">, value: string) => void;
+  countLabel?: string;
 }) {
   return (
     <div className="library-rows">
@@ -577,7 +579,7 @@ function LibraryRows({
                 type="button"
               >
                 <i style={{ width: `${Math.max(2, Math.min(100, item.percent ?? 0))}%` }} />
-                <span><strong>{formatNumber(item.count)}</strong> scrobbles</span>
+                <span><strong>{formatNumber(item.count)}</strong> {countLabel}</span>
               </button>
             )}
           </article>

@@ -226,7 +226,8 @@ weighted streams: first catalogue artist 1, other artists 0.35. Spotify publishe
 only that primary artists receive more weight, not its coefficients or billing
 roles. Catalogue order is our role proxy. The estimate matches the supplied
 2023–2025 top-five rankings; that calibration is not proof of Spotify's formula.
-The displayed counts remain eligible plays, not fractional ranking scores.
+Artist counts and order both use the same estimated weighted plays, including
+fractional contributions. Raw artist counts are not mixed into the Wrapped list.
 
 Known streams of 30 seconds or less and known private sessions are excluded from
 Wrapped rankings. API records with unknown listening duration are included;

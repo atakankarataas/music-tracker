@@ -938,9 +938,6 @@ async function getLibraryPage(
           : sql`play_count DESC, title ASC`;
 
   if (mode === "artists") {
-    const artistOrder = wrapped && (sort === "plays_desc" || sort === "plays_asc")
-      ? sort === "plays_asc" ? sql`ranking_score ASC, title ASC` : sql`ranking_score DESC, title ASC`
-      : order;
     const artistFilter = !filter ? sql`` : filter.type === "artist"
       ? sql`AND artist_name = ${filter.value}` : filterPredicate;
     const [row] = await sql<LibraryPageRow[]>`
@@ -956,13 +953,13 @@ async function getLibraryPage(
         ) c ON c.spotify_id=s.spotify_id
         WHERE true ${datePredicate}
       ), grouped AS (
-        SELECT artist_name AS title, NULL::text AS subtitle, count(*)::int AS play_count,
+        SELECT artist_name AS title, NULL::text AS subtitle, sum(credit_weight)::double precision AS play_count,
           max(image_url) AS image_url, max(artist_id) AS entity_id,
-          NULL::text AS album_id, max(played_at) AS last_play, sum(credit_weight) AS ranking_score
+          NULL::text AS album_id, max(played_at) AS last_play
         FROM credited WHERE true ${artistFilter} ${searchPredicate} GROUP BY artist_name
       ), ranked AS (
-        SELECT *, (row_number() OVER (ORDER BY ${artistOrder}))::int AS rank,
-          max(play_count) OVER ()::int AS max_count FROM grouped
+        SELECT *, (row_number() OVER (ORDER BY ${order}))::int AS rank,
+          max(play_count) OVER () AS max_count FROM grouped
       ), page AS (SELECT * FROM ranked WHERE rank BETWEEN ${firstRank} AND ${lastRank})
       SELECT (SELECT count(*)::text FROM grouped) AS total_count,
         coalesce((SELECT json_agg(json_build_object(

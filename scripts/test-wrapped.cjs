@@ -38,6 +38,8 @@ Module._load = (request, ...rest) => {
       const list = await getLegacyLibraryData({ mode: 'artists', period: 'custom', start, end, wrapped: true });
       assert.deepEqual(recap.topArtists.slice(0, 10).map(x => [x.name, x.plays]),
         list.items.slice(0, 10).map(x => [x.title, x.count]), `${year}: Wrapped and View all disagree`);
+      assert.ok(recap.topArtists.every((item, i, all) => i === 0 || all[i - 1].plays >= item.plays),
+        `${year}: displayed artist counts must follow the ranking`);
       for (const [mode, items] of [['tracks', recap.topTracks], ['albums', recap.topAlbums]]) {
         const full = await getLegacyLibraryData({ mode, period: 'custom', start, end, wrapped: true });
         assert.deepEqual(items.slice(0, 10).map(x => [x.name, x.secondary, x.plays, x.id]),
