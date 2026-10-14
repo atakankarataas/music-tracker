@@ -20,8 +20,8 @@ export default async function WrappedPage({ searchParams }: { searchParams: Prom
   const artistCount = data.artists;
   const firstYear = data.archiveFirstPlay ? Number(data.archiveFirstPlay.slice(0, 4)) : latestYear;
   const years = Array.from({ length: Math.max(1, latestYear - Math.max(2018, firstYear) + 1) }, (_, i) => latestYear - i);
-  const href = (mode: string) => `/library?${new URLSearchParams({ mode, period: "custom", start, end })}`;
-  const artistHref = (name: string) => `/library?${new URLSearchParams({ mode: "tracks", period: "custom", start, end, filter_type: "artist", filter_value: name })}`;
+  const href = (mode: string) => `/library?${new URLSearchParams({ mode, period: "custom", start, end, ranking: "wrapped" })}`;
+  const artistHref = (name: string) => `/library?${new URLSearchParams({ mode: "tracks", period: "custom", start, end, ranking: "wrapped", filter_type: "artist", filter_value: name })}`;
   return <div className="page-stack">
     <div className={styles.topline}><span><Disc3 size={16} /> WRAPPED RECONSTRUCTION</span><WrappedControls key={year} year={year} years={years} className={styles.yearPicker} /></div>
     <header className={styles.hero}>
@@ -29,12 +29,12 @@ export default async function WrappedPage({ searchParams }: { searchParams: Prom
       <div className={styles.mosaic} aria-label="Albums that shaped your year">{data.topAlbums.slice(0, 9).map((album, i) => <div key={`${album.id}-${i}`}>{album.imageUrl ? <Image src={album.imageUrl} alt={`${album.name} — ${album.secondary}`} width={100} height={100} sizes="100px" priority={i < 3} /> : <Disc3 size={60} />}</div>)}{!data.topAlbums.length && <div className={styles.emptyCover}><Disc3 size={72} /><span>Your soundtrack starts here</span></div>}</div>
       <span className={styles.heroStamp}>VOL. {String(year).slice(-2)} / ATAKAN.FM</span>
     </header>
-    <section className="stats-grid"><StatTile label="Plays in your archive" value={formatNumber(data.totalPlays)} /><StatTile label="Different artists" value={formatNumber(artistCount)} /><StatTile label="Tracks in rotation" value={formatNumber(data.tracks)} /><StatTile label="Days with music" value={formatNumber(data.activeDays)} /></section>
+    <section className="stats-grid"><StatTile label="Eligible plays" value={formatNumber(data.totalPlays)} /><StatTile label="Different artists" value={formatNumber(artistCount)} /><StatTile label="Tracks in rotation" value={formatNumber(data.tracks)} /><StatTile label="Days with music" value={formatNumber(data.activeDays)} /></section>
     {!!topArtists.length && <section><div className={styles.sectionTitle}><span>THE ONES YOU CAME BACK TO</span><h2>Your main characters.</h2></div><div className={styles.podium}>{topArtists.slice(0, 3).map((item, i) => <Link href={artistHref(item.name)} className={styles.artist} key={item.name}><span className={styles.rank}>0{i + 1}</span><div><span>{i === 0 ? "YOUR HEADLINER" : "ON HEAVY ROTATION"}</span><h3>{item.name}</h3><p>{formatNumber(item.plays)} plays</p></div><ArrowUpRight size={22} /></Link>)}</div></section>}
     <Surface><SectionHeader title="The shape of your year" detail="Every rise, every quiet month. Ranked by recorded plays." /><LineChart data={data.activity} /></Surface>
     <div id="year-rankings" className={styles.rankings}>
       <Surface>
-        <SectionHeader title="Top artists" href={href("artists")} />
+        <SectionHeader title="Top artists" detail="Estimated Spotify weighting · counts show eligible plays" href={href("artists")} />
         <EntityList items={topArtists.slice(0, 10)} kind="artist" itemHref={item => artistHref(item.name)} />
       </Surface>
       <Surface>
@@ -47,6 +47,6 @@ export default async function WrappedPage({ searchParams }: { searchParams: Prom
         <EntityList items={data.topAlbums.slice(0, 10)} kind="album" />
       </Surface>
     </div>
-    <p className="feature-footnote">An archive recap, not official Spotify Wrapped. Each credited artist receives one play; total plays count each listen once. Missing credits use the recorded artist. Counts use the same recorded plays as View all, including private listening. A new page load or Refresh reads the latest archive. The 12 November cutoff is an estimate, and the current year runs up to today or that cutoff. Spotify’s own ranking and filtering can differ. <Link href={`/?period=custom&start=${start}&end=${year}-12-31`}>Browse any date range ↗</Link></p>
+    <p className="feature-footnote">Artist order estimates Spotify’s weighted streams: first catalogue artist 1, other artists 0.35. Spotify does not publish its coefficients or billing roles; this estimate matches the supplied 2023–2025 top-five lists. Counts show eligible plays, not scores. Known listens of 30 seconds or less and known private sessions are excluded; API listens have unknown duration. View all uses the same rules. The 12 November cutoff is an estimate. Taste Profile exclusions and Spotify’s album scoring are unavailable; albums here are ranked by plays. <a href="https://newsroom.spotify.com/2025-12-05/wrapped-methodology-explained/" target="_blank" rel="noreferrer">Spotify’s methodology ↗</a> · <Link href={`/?period=custom&start=${start}&end=${year}-12-31`}>Browse any date range ↗</Link></p>
   </div>;
 }

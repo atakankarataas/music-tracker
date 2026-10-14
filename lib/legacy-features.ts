@@ -5,6 +5,7 @@ import { unstable_cache } from "next/cache";
 import { sql } from "@/lib/db";
 
 import { DISPLAY_TIME_ZONE, PERIOD_DAYS } from "@/lib/periods";
+import { wrappedEligibility, wrappedCreditWeight } from "@/lib/wrapped-policy";
 
 export type MonthComparison = {
   current: number;
@@ -597,6 +598,7 @@ export type LegacyLibraryFilter = {
 };
 
 export type LegacyLibraryOptions = {
+  wrapped?: boolean;
   mode?: LegacyLibraryMode;
   period?: LegacyLibraryPeriod;
   start?: string;
@@ -846,9 +848,10 @@ async function getLibraryPage(
   pageSize: number,
   start: string | undefined,
   end: string | undefined,
+  wrapped = false,
 ): Promise<{ total: number; items: LegacyLibraryItem[] }> {
   const days = LIBRARY_PERIOD_DAYS[period] ?? 0;
-  const datePredicate = period === "all"
+  const baseDatePredicate = period === "all"
     ? sql``
     : period === "custom"
       ? sql`
@@ -862,6 +865,7 @@ async function getLibraryPage(
           )
           AND played_at <= now()
         `;
+  const datePredicate = sql`${baseDatePredicate} ${wrapped ? wrappedEligibility() : sql``}`;
   const filterPredicate = !filter
     ? sql``
     : filter.type === "artist"
@@ -930,29 +934,34 @@ async function getLibraryPage(
       ? sql`title ASC, subtitle ASC NULLS LAST`
       : sort === "recent_desc"
         ? sql`last_play DESC, title ASC`
-        : sql`play_count DESC, title ASC`;
+        : wrapped ? sql`play_count DESC, title ASC, subtitle ASC NULLS LAST, entity_id ASC NULLS LAST`
+          : sql`play_count DESC, title ASC`;
 
   if (mode === "artists") {
+    const artistOrder = wrapped && (sort === "plays_desc" || sort === "plays_asc")
+      ? sort === "plays_asc" ? sql`ranking_score ASC, title ASC` : sql`ranking_score DESC, title ASC`
+      : order;
     const artistFilter = !filter ? sql`` : filter.type === "artist"
       ? sql`AND artist_name = ${filter.value}` : filterPredicate;
     const [row] = await sql<LibraryPageRow[]>`
       WITH credited AS (
         SELECT s.played_at,s.track_name,s.album_name,s.image_url,
           coalesce(c.artist_name,s.artist_name) AS artist_name,
-          coalesce(c.artist_id,s.artist_id) AS artist_id
+          coalesce(c.artist_id,s.artist_id) AS artist_id,
+          ${wrapped ? wrappedCreditWeight() : sql`1.0`} AS credit_weight
         FROM public.scrobbles s
         LEFT JOIN (
-          SELECT spotify_id,artist_id,max(artist_name) AS artist_name
+          SELECT spotify_id,artist_id,max(artist_name) AS artist_name,min(position) AS position
           FROM public.music_track_artists GROUP BY spotify_id,artist_id
         ) c ON c.spotify_id=s.spotify_id
         WHERE true ${datePredicate}
       ), grouped AS (
         SELECT artist_name AS title, NULL::text AS subtitle, count(*)::int AS play_count,
           max(image_url) AS image_url, max(artist_id) AS entity_id,
-          NULL::text AS album_id, max(played_at) AS last_play
+          NULL::text AS album_id, max(played_at) AS last_play, sum(credit_weight) AS ranking_score
         FROM credited WHERE true ${artistFilter} ${searchPredicate} GROUP BY artist_name
       ), ranked AS (
-        SELECT *, (row_number() OVER (ORDER BY ${order}))::int AS rank,
+        SELECT *, (row_number() OVER (ORDER BY ${artistOrder}))::int AS rank,
           max(play_count) OVER ()::int AS max_count FROM grouped
       ), page AS (SELECT * FROM ranked WHERE rank BETWEEN ${firstRank} AND ${lastRank})
       SELECT (SELECT count(*)::text FROM grouped) AS total_count,
@@ -1097,9 +1106,10 @@ async function getLibraryChart(
   start: string | undefined,
   end: string | undefined,
   chartMode: LegacyLibraryChartMode,
+  wrapped = false,
 ) {
   const days = LIBRARY_PERIOD_DAYS[period] ?? 0;
-  const datePredicate = period === "all"
+  const baseDatePredicate = period === "all"
     ? sql``
     : period === "custom"
       ? sql`
@@ -1113,6 +1123,7 @@ async function getLibraryChart(
           )
           AND played_at <= now()
         `;
+  const datePredicate = sql`${baseDatePredicate} ${wrapped ? wrappedEligibility() : sql``}`;
   const filterPredicate = !filter
     ? sql``
     : filter.type === "artist"
@@ -1180,6 +1191,7 @@ async function getLibraryRelated(
   filter: LegacyLibraryFilter | null,
   start: string | undefined,
   end: string | undefined,
+  wrapped = false,
 ): Promise<{
   header: LegacyLibraryHeader | null;
   relatedAlbums: LegacyLibraryRelatedItem[];
@@ -1188,7 +1200,7 @@ async function getLibraryRelated(
   if (!filter) return { header: null, relatedAlbums: [], relatedTracks: [] };
 
   const days = LIBRARY_PERIOD_DAYS[period] ?? 0;
-  const datePredicate = period === "all"
+  const baseDatePredicate = period === "all"
     ? sql``
     : period === "custom"
       ? sql`
@@ -1202,6 +1214,7 @@ async function getLibraryRelated(
           )
           AND played_at <= now()
         `;
+  const datePredicate = sql`${baseDatePredicate} ${wrapped ? wrappedEligibility() : sql``}`;
   const filterPredicate = filter.type === "artist"
     ? sql`(artist_name = ${filter.value} OR EXISTS (SELECT 1 FROM public.music_track_artists c WHERE c.spotify_id=scrobbles.spotify_id AND c.artist_name=${filter.value}))`
     : filter.type === "album"
@@ -1332,9 +1345,9 @@ export async function getLegacyLibraryData(
   // from Istanbul to a Tokyo-region pooler. The connection pool holds four
   // sockets, so all three can be in flight at once.
   const [pageData, chartData, related] = await Promise.all([
-    getLibraryPage(mode, period, filter, search, sort, page, pageSize, start, end),
-    getLibraryChart(mode, period, filter, search, start, end, chartMode),
-    getLibraryRelated(period, filter, start, end),
+    getLibraryPage(mode, period, filter, search, sort, page, pageSize, start, end, options.wrapped),
+    getLibraryChart(mode, period, filter, search, start, end, chartMode, options.wrapped),
+    getLibraryRelated(period, filter, start, end, options.wrapped),
   ]);
 
   return {

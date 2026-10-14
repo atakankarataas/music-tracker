@@ -13,6 +13,7 @@ import {
   parseLegacyLibraryPeriod,
   parseLegacyLibrarySort,
 } from "@/lib/legacy-features";
+import { wrappedRange } from "@/lib/periods";
 
 export const dynamic = "force-dynamic";
 
@@ -85,7 +86,11 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
     end = undefined;
   }
 
+  const range = wrappedRange(start?.slice(0, 4));
+  const wrapped = firstValue(params.ranking) === "wrapped" && period === "custom"
+    && start === range.start && end === range.end;
   const result = await getLegacyLibraryData({
+    wrapped,
     mode,
     period,
     start,
@@ -138,6 +143,7 @@ export default async function LibraryPage({ searchParams }: { searchParams: Prom
     })),
   };
   const state: LibraryState = {
+    wrapped,
     mode: result.mode,
     period: result.period,
     start: period === "custom" ? result.currentStart : "",

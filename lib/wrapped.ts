@@ -1,6 +1,7 @@
 import "server-only";
 import { sql } from "@/lib/db";
 import type { EntityItem, ChartPoint } from "@/lib/data";
+import { wrappedEligibility, wrappedCreditWeight } from "@/lib/wrapped-policy";
 
 export type WrappedData = {
   archiveFirstPlay: string | null;
@@ -16,8 +17,8 @@ export type WrappedData = {
   dayparts: ChartPoint[];
 };
 
-/** Scan the same archive window as Library once, then expand artist credits.
- * Each listed artist receives a full play; archive totals count the event once. */
+/** Rank eligible listens by estimated Spotify-style weighted streams.
+ * Displayed plays remain actual eligible listens, never fractional scores. */
 export async function loadWrappedData(start: string, end: string): Promise<WrappedData> {
   const [row] = await sql<WrappedData[]>`
     WITH plays AS MATERIALIZED (
@@ -26,21 +27,23 @@ export async function loadWrappedData(start: string, end: string): Promise<Wrapp
       FROM public.scrobbles
       WHERE played_at >= ${start}::date::timestamp AT TIME ZONE 'Europe/Istanbul'
         AND played_at < (${end}::date + 1)::timestamp AT TIME ZONE 'Europe/Istanbul'
+        ${wrappedEligibility()}
     ), track_plays AS MATERIALIZED (
       SELECT spotify_id, artist_name, track_name, count(*)::int AS n, max(image_url) AS image_url
       FROM plays GROUP BY spotify_id, artist_name, track_name
     ), credits AS (
-      SELECT c.spotify_id, c.artist_id, max(c.artist_name) AS artist_name
+      SELECT c.spotify_id, c.artist_id, max(c.artist_name) AS artist_name, min(c.position) AS position
       FROM public.music_track_artists c
       WHERE c.spotify_id IN (SELECT spotify_id FROM track_plays)
       GROUP BY c.spotify_id, c.artist_id
     ), artists AS MATERIALIZED (
       SELECT coalesce(c.artist_name,p.artist_name) AS name, sum(p.n)::int AS plays,
+        sum(p.n * ${wrappedCreditWeight()}) AS ranking_score,
         max(c.artist_id) AS id, max(p.image_url) AS "imageUrl"
       FROM track_plays p LEFT JOIN credits c ON c.spotify_id = p.spotify_id
       GROUP BY coalesce(c.artist_name,p.artist_name)
     ), artist_rank AS (
-      SELECT * FROM artists ORDER BY plays DESC, name LIMIT 50
+      SELECT * FROM artists ORDER BY ranking_score DESC, name LIMIT 50
     ), track_rank AS (
       SELECT track_name AS name, artist_name AS secondary, n AS plays,
         image_url AS "imageUrl", spotify_id AS id
@@ -75,7 +78,7 @@ export async function loadWrappedData(start: string, end: string): Promise<Wrapp
       (SELECT count(*)::int FROM plays) AS "totalPlays",
       (SELECT count(*)::int FROM artists) AS artists,
       (SELECT count(DISTINCT coalesce(spotify_id, track_name || chr(31) || artist_name))::int FROM track_plays) AS tracks,
-      coalesce((SELECT json_agg(artist_rank ORDER BY plays DESC,name) FROM artist_rank),'[]'::json) AS "topArtists",
+      coalesce((SELECT json_agg(artist_rank ORDER BY ranking_score DESC,name) FROM artist_rank),'[]'::json) AS "topArtists",
       coalesce((SELECT json_agg(album_rank ORDER BY plays DESC,name,secondary,id) FROM album_rank),'[]'::json) AS "topAlbums",
       coalesce((SELECT json_agg(track_rank ORDER BY plays DESC,name,secondary,id) FROM track_rank),'[]'::json) AS "topTracks",
       (SELECT json_agg(json_build_object('label',label,'value',value) ORDER BY bucket) FROM activity) AS activity,

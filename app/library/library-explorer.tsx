@@ -24,6 +24,7 @@ export type LibrarySort = "plays_desc" | "plays_asc" | "name_asc" | "recent_desc
 export type LibraryFilterType = "artist" | "album" | "track";
 
 export type LibraryState = {
+  wrapped?: boolean;
   mode: LibraryMode;
   period: LibraryPeriod;
   start: string;
@@ -199,6 +200,8 @@ export function LibraryExplorer({ data, state }: { data: LibraryViewData; state:
   const navigate = (changes: Partial<LibraryState>, replace = false) => {
     const next = { ...state, ...changes };
     const params = new URLSearchParams(currentSearchParams.toString());
+    // A free-range change leaves the Wrapped model; search, paging and tabs keep it.
+    if (changes.period !== undefined || changes.start !== undefined || changes.end !== undefined) params.delete("ranking");
     params.set("mode", next.mode);
     params.set("period", next.period);
     params.set("sort", next.sort);
@@ -307,7 +310,7 @@ export function LibraryExplorer({ data, state }: { data: LibraryViewData; state:
           <p className="page-description">
             {data.headerInfo
               ? `${formatNumber(data.headerInfo.count)} scrobbles${data.headerInfo.trackCount ? ` · ${formatNumber(data.headerInfo.trackCount)} tracks` : ""}`
-              : "Every artist, album, track and scrobble in your listening archive."}
+              : state.wrapped ? "Wrapped eligible listens. Artist order uses estimated Spotify weighting; counts show plays." : "Every artist, album, track and scrobble in your listening archive."}
           </p>
         </div>
         {data.headerInfo ? (
@@ -361,7 +364,7 @@ export function LibraryExplorer({ data, state }: { data: LibraryViewData; state:
           <SlidersHorizontal aria-hidden="true" size={15} />
           <span className="sr-only">Sort library</span>
           <select value={state.sort} onChange={(event) => navigate({ sort: event.target.value as LibrarySort, page: 1 })}>
-            {SORTS.map((sort) => <option key={sort.value} value={sort.value}>{sort.label}</option>)}
+            {SORTS.map((sort) => <option key={sort.value} value={sort.value}>{state.wrapped && state.mode === "artists" && sort.value === "plays_desc" ? "Spotify weighting (estimate)" : state.wrapped && state.mode === "artists" && sort.value === "plays_asc" ? "Spotify weighting (ascending)" : sort.label}</option>)}
           </select>
         </label>
 

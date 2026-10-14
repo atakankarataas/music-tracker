@@ -221,45 +221,31 @@ Normal home/library rankings credit each catalogue artist in full; total plays
 still count each listening event once. Artist filters and detail pages include
 collaborations. Missing catalogue credits fall back to the recorded artist.
 
-Wrapped opens on the current year (2026 today) and ranks artists by plays only.
-Each credited artist receives one full play; overall totals count each listen
-once. It uses one query for rankings and monthly activity and reads live data on every
-server render. Its counts include the same recorded plays as Library’s View all
-links, including private listening. The year picker navigates immediately, and
-Refresh fetches the latest database values without changing the year.
-Overview opens with the last 30 days selected.
+Wrapped opens on the current year and ranks artists by estimated Spotify-style
+weighted streams: first catalogue artist 1, other artists 0.35. Spotify publishes
+only that primary artists receive more weight, not its coefficients or billing
+roles. Catalogue order is our role proxy. The estimate matches the supplied
+2023–2025 top-five rankings; that calibration is not proof of Spotify's formula.
+The displayed counts remain eligible plays, not fractional ranking scores.
 
-Wrapped's 1 January–12 November window is an estimate: Spotify publishes
-mid-November, not a specific cutoff day. The current year ends at today until
-that cutoff. Older years remain selectable. This recap does not claim to
-reproduce Spotify's proprietary artist or album rankings; free date selection
-remains available in Overview and Library.
+Known streams of 30 seconds or less and known private sessions are excluded from
+Wrapped rankings. API records with unknown listening duration are included;
+Extended History imports supply measured duration and reconcile skipped plays
+with their export timestamps. Normal Overview and Library date ranges retain
+unweighted archive counts. Wrapped's View all links carry `ranking=wrapped` and
+share the eligibility and weighting rules; changing the date range exits that
+model. Reads remain uncached so fresh data appears on reload or Refresh.
 
-Apply migration 0015 before deploying this version, then restore privacy flags:
+The 1 January–12 November window is an estimate of Spotify's published
+"mid-November" cutoff. Taste Profile exclusions and historical billing roles are
+unavailable. Album lists still show eligible recorded plays, since Spotify's
+album scoring formula is not public. No live polling observer has been added.
 
-```sh
-python3 ingest/migrate.py
-python3 ingest/backfill_privacy.py
-```
-
-Wrapped and normal archive browsing include the same private and short API
-records. Wrapped is a yearly archive recap, not a reproduction of Spotify’s
-privacy/content filters. Export import still admits music records >=30s; known
-short API records remain in the archive with their measured duration. The archive stores eligible
-music plays, so its duration subtotal cannot reproduce official total minutes
-(which also include short plays and other content). Taste Profile exclusions
-and Spotify's content filters cannot be reconstructed from this archive.
-
-Regression and read-only integration checks:
+Read-only parity/reference check (local credentials and screenshots stay private):
 
 ```sh
-MUSIC_TEST_DATABASE=1 node --env-file=.env scripts/test-analytics.cjs
-node --env-file=.env scripts/verify-analytics.cjs
+NODE_ENV=production node --env-file=.env scripts/test-wrapped.cjs
 ```
-
-The SQL regression test only writes temporary tables. For local screenshot
-comparison use `python3 scripts/audit-wrapped.py --help`; keep personal reference
-files and reports inside the gitignored `reports/` directory.
 
 ## Supabase tracker deployment
 
