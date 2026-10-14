@@ -14,9 +14,9 @@ export default async function SyncPage() {
       <StatTile label="Summary refresh" value={Number(data.total)===Number(data.rollup_total)?"Up to date":"Refreshing"} />
     </section>
     <Surface><SectionHeader title="Recent tracker runs" />
-      <p>GitHub schedules can arrive late. Spotify may expose only the latest 50 plays; a successful run confirms those records were saved, not that all earlier or offline plays were available. Importing an Extended Streaming History export reconciles older gaps.</p>
-      <div className="sync-table"><table><thead><tr><th>Started</th><th>Status</th><th>Fetched</th><th>New</th><th>Details</th></tr></thead><tbody>
-        {runs.map(run=><tr key={run.id}><td>{new Date(run.started_at).toLocaleString("en-GB",{timeZone:"Europe/Istanbul"})}</td><td>{run.status}</td><td>{run.fetched}</td><td>{run.inserted}</td><td>{run.github_run_id ? <a href={`https://github.com/atakankarataas/music-tracker/actions/runs/${encodeURIComponent(run.github_run_id)}`} target="_blank" rel="noreferrer">Open run ↗</a> : run.stop_reason || run.error_code || "In progress"}</td></tr>)}
+      <p>{data.latest?.source === "supabase_edge" ? "Supabase checks for new plays every two minutes and makes a deeper scan daily." : "GitHub is the current provider while the Supabase tracker is prepared."} Spotify may expose only the latest 50 plays; a successful run confirms those records were saved, not that all earlier or offline plays were available. Importing an Extended Streaming History export reconciles older gaps.</p>
+      <div className="sync-table"><table><thead><tr><th>Started</th><th>Provider</th><th>Status</th><th>Fetched</th><th>New</th><th>Details</th></tr></thead><tbody>
+        {runs.map(run=><tr key={run.id}><td>{new Date(run.started_at).toLocaleString("en-GB",{timeZone:"Europe/Istanbul"})}</td><td>{run.source === "supabase_edge" ? "Supabase" : "GitHub"}</td><td>{run.status}</td><td>{run.fetched}</td><td>{run.inserted}</td><td>{run.github_run_id ? <a href={`https://github.com/atakankarataas/music-tracker/actions/runs/${encodeURIComponent(run.github_run_id)}`} target="_blank" rel="noreferrer">Open run ↗</a> : run.stop_reason || run.error_code || "In progress"}</td></tr>)}
       </tbody></table></div>
       {!runs.length && <p>New runs will appear here after the updated tracker starts.</p>}
     </Surface><Link className="quiet-link" href="/">Back to overview</Link></div>;

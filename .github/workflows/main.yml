@@ -1,12 +1,8 @@
 name: Spotify Takip Robotu
 
 on:
-  schedule:
-    # Off-hour minutes reduce scheduler contention; GitHub scheduling remains best effort.
-    - cron: "7,37 * * * *"
-    # Once a day, attempt a full rolling-window scan for offline plays that
-    # Spotify uploaded later with an older played_at timestamp.
-    - cron: "15 3 * * *"
+  # Supabase Cron runs the production tracker every two minutes. Keep this
+  # workflow available only as a manually requested fallback.
   workflow_dispatch:
     inputs:
       recovery:
@@ -54,5 +50,5 @@ jobs:
           SPOTIFY_SYNC_LOOKBACK_DAYS: "7"
           SPOTIFY_SYNC_MAX_PAGES: "20"
           SPOTIFY_SYNC_OVERLAP_PAGES: "2"
-          SPOTIFY_SYNC_FORCE_RECOVERY: ${{ github.event.schedule == '15 3 * * *' || inputs.recovery }}
+          SPOTIFY_SYNC_FORCE_RECOVERY: ${{ inputs.recovery }}
         run: python tracker.py

@@ -1,10 +1,10 @@
 # Listening
 
-A private, server-rendered view of a Spotify listening archive. Spotify ingestion remains in Python; the web application is Next.js and reads from Supabase Postgres through a dedicated read-only role.
+A private, server-rendered view of a Spotify listening archive. A Supabase Edge Function collects new plays; Python reconciles historical exports and enriches metadata. The web application is Next.js and reads from Supabase Postgres through a dedicated read-only role.
 
 ## Architecture
 
-- `tracker.py` and the existing GitHub Action are scheduled to append Spotify plays at minutes 7 and 37 each hour. GitHub scheduling is best effort; actual runs can be hours apart. The tracker follows Spotify's `before` cursor across 50-item pages and runs a deeper rolling recovery scan once a day, so offline plays uploaded later can still be reconciled.
+- The production tracker runs as `supabase/functions/spotify-sync` every two minutes through Supabase Cron, with a daily recovery scan. Scheduled calls were verified on 14 October 2026 before removing the GitHub tracker schedule. GitHub remains available as a manual fallback. The same track/time matching is used by both providers and the export importer.
 - `ingest/import_history.py` backfills a Spotify "Extended Streaming History" export.
 - `db/migrations/` owns the database schema, permissions, indexes and analytics rollups.
 - `ingest/migrate.py` applies forward-only, checksummed migrations.
@@ -94,11 +94,12 @@ Artwork is served straight from Spotify's CDN (`images.unoptimized` in
 routing a large archive through Vercel's optimizer can exhaust its source-image
 allowance without a meaningful saving.
 
-The tracker workflow needs `DB_URI`, `SPOTIPY_CLIENT_ID`, `SPOTIPY_CLIENT_SECRET`
+The manual fallback workflow needs `DB_URI`, `SPOTIPY_CLIENT_ID`, `SPOTIPY_CLIENT_SECRET`
 and `SPOTIPY_CACHE` as GitHub Actions secrets. Normal runs scan until two pages
-overlap the newest Supabase record. At 03:15 UTC a daily recovery run attempts
-to scan up to 20 pages across a seven-day lookback window. A manual workflow run
-can enable the same recovery mode with its `recovery` input. Actual Actions usage depends on run duration and the account plan.
+overlap the newest Supabase record. Supabase Cron runs a daily recovery scan at
+03:15 UTC (06:15 Istanbul), attempting up to 20 pages across a seven-day lookback
+window. A manual workflow run can enable the same recovery mode with its
+`recovery` input. Metadata enrichment and CI still run on GitHub Actions.
 
 Spotify's response includes a `before` cursor and `next` URL, but live validation
 for this account currently returns an empty second page after the newest 50
@@ -239,3 +240,49 @@ node --env-file=.env scripts/verify-analytics.cjs
 The SQL regression test only writes temporary tables. For local screenshot
 comparison use `python3 scripts/audit-wrapped.py --help`; keep personal reference
 files and reports inside the gitignored `reports/` directory.
+
+## Supabase tracker deployment
+
+The Edge Function uses the existing project's included function quota: 21,600
+normal invocations per 30 days plus 30 daily recovery calls. No new project or
+paid service is created. The tracker uses TypeScript and a single short-lived
+Postgres connection. Spotify credentials and the 384-bit trigger credential
+are stored in Supabase Vault; the function has no anonymous write path.
+
+Setup order:
+
+```sh
+python3 ingest/migrate.py
+python3 ingest/supabase_tracker.py --configure
+# Deploy spotify-sync from supabase/functions/spotify-sync with Supabase CLI
+# or use scripts/bundle-edge.py to prepare one Dashboard editor file.
+python3 scripts/bundle-edge.py
+python3 ingest/supabase_tracker.py --activate
+```
+
+Activation checks absent/invalid auth, a read-only dry run and two live calls
+before creating cron schedules. Observe at least two scheduled successful runs
+before removing the schedule block in .github/workflows/main.yml. Leave manual
+workflow_dispatch available for recovery. Existing metadata enrichment/CI jobs
+remain separate.
+
+The handler uses a 150-second expiring lease and the Python writer's advisory
+transaction lock. Duplicate/rounded timestamps of the same track are reconciled;
+different offline tracks at the same timestamp survive. API writes preserve
+export listening duration, privacy and skip flags. All catalogue artists in the
+track response are saved immediately. Rotated refresh tokens are persisted in
+Vault. Failures carry sanitized diagnostics into music_sync_runs; a missing
+Supabase heartbeat for ten minutes makes the web status show a delay.
+
+Only new Supabase run/cron diagnostics are retained for 14 days to keep the free
+project's storage bounded. Listening history is never deleted by that job.
+
+Checks:
+
+```sh
+deno check supabase/functions/spotify-sync/index.ts
+deno test --allow-env supabase/functions/spotify-sync/core_test.ts
+MUSIC_TEST_DATABASE=1 deno test --env-file=.env --allow-env --allow-net supabase/functions/spotify-sync/storage_test.ts
+```
+
+The SQL test writes only temporary tables. Its fixtures never enter the archive.

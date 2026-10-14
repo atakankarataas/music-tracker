@@ -1,0 +1,6 @@
+project_id = "music-tracker"
+
+[functions.spotify-sync]
+# A Vault-held 256-bit bearer secret authenticates cron requests in the handler.
+# No public request can read Spotify history or write the archive.
+verify_jwt = false

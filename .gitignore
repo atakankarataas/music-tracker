@@ -23,3 +23,8 @@ GITHUB_ACTIONS_SECENEKLERI.md
 # ~180 MB of raw Spotify export JSON. Already ingested into Supabase, and large
 # enough that GitHub would warn on individual files; keep it out of the repo.
 Spotify Extended Streaming History/
+
+# Supabase local runtime secrets and CLI state.
+supabase/.temp/
+supabase/functions/.env*
+!supabase/functions/.env.example

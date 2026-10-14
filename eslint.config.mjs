@@ -5,7 +5,8 @@ import nextTs from "eslint-config-next/typescript";
 export default defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores([".next/**", "node_modules/**"]),
+  globalIgnores([
+    "supabase/**", "reports/**", ".next/**", "node_modules/**"]),
   {
     // Node test runner scripts are CommonJS on purpose: they transpile the app's
     // TypeScript in-process, so they cannot themselves be ES modules.

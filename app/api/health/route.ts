@@ -16,6 +16,7 @@ export async function GET() {
     const [row] = await sql<{
       last_success: string | null;
       last_run_status: string | null;
+      tracker_source: string | null;
       last_play: string | null;
       sync_recent: boolean | null;
       total_plays: string;
@@ -23,7 +24,8 @@ export async function GET() {
       SELECT
         (SELECT max(finished_at) FROM public.music_sync_runs WHERE status IN ('success','warning')) AS last_success,
         (SELECT status FROM public.music_sync_runs ORDER BY started_at DESC LIMIT 1) AS last_run_status,
-        (SELECT max(finished_at) > now() - interval '90 minutes' FROM public.music_sync_runs
+        (SELECT source FROM public.music_sync_runs ORDER BY started_at DESC LIMIT 1) AS tracker_source,
+        (SELECT max(finished_at) > now() - CASE WHEN (SELECT source FROM public.music_sync_runs ORDER BY started_at DESC LIMIT 1)='supabase_edge' THEN interval '10 minutes' ELSE interval '90 minutes' END FROM public.music_sync_runs
           WHERE status IN ('success','warning')) AS sync_recent,
         (SELECT max(played_at) FROM public.scrobbles) AS last_play,
         (SELECT count(*)::text FROM public.scrobbles) AS total_plays
@@ -42,6 +44,7 @@ export async function GET() {
         ...(authorized ? {
           lastSyncAt: row.last_success,
           lastRunStatus: row.last_run_status,
+          trackerSource: row.tracker_source,
           lastPlayAt: row.last_play,
           totalPlays: Number(row.total_plays),
         } : {}),
