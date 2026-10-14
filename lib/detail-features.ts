@@ -91,6 +91,7 @@ type RawRankedItem = {
 type RawDetailRow = {
   lifetime_plays: string;
   period_plays: string;
+  period_events: number;
   active_days: number;
   distinct_tracks: number;
   distinct_albums: number;
@@ -300,17 +301,17 @@ async function loadDetailPeriodFeatures(
     lifetime_track_groups AS (
       SELECT
         track_key,
-        track_name,
-        artist_name,
-        sum(play_weight)::double precision AS lifetime_plays,
+        max(track_name) AS track_name,
+        max(artist_name) AS artist_name,
+        count(*)::int AS lifetime_plays,
         max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
         max(spotify_id) FILTER (WHERE spotify_id IS NOT NULL) AS spotify_id,
         max(album_id) FILTER (WHERE album_id IS NOT NULL) AS album_id
       FROM entity
-      GROUP BY track_key, track_name, artist_name
+      GROUP BY track_key
     ),
     period_track_groups AS (
-      SELECT track_key, sum(play_weight)::double precision AS period_plays
+      SELECT track_key, count(*)::int AS period_plays
       FROM period_rows
       GROUP BY track_key
     ),
@@ -329,17 +330,17 @@ async function loadDetailPeriodFeatures(
     period_album_groups AS (
       SELECT
         album_key,
-        album_name,
-        artist_name,
-        sum(play_weight)::double precision AS period_plays,
+        max(album_name) AS album_name,
+        max(artist_name) AS artist_name,
+        count(*)::int AS period_plays,
         max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
         max(album_id) FILTER (WHERE album_id IS NOT NULL) AS album_id
       FROM period_rows
       WHERE album_name IS NOT NULL
-      GROUP BY album_key, album_name, artist_name
+      GROUP BY album_key
     ),
     lifetime_album_groups AS (
-      SELECT album_key, sum(play_weight)::double precision AS lifetime_plays
+      SELECT album_key, count(*)::int AS lifetime_plays
       FROM entity
       WHERE album_key IS NOT NULL
       GROUP BY album_key
@@ -372,6 +373,7 @@ async function loadDetailPeriodFeatures(
     period_stats AS (
       SELECT
         sum(play_weight)::text AS period_plays,
+        count(*)::int AS period_events,
         count(DISTINCT local_day)::int AS active_days,
         count(DISTINCT track_key)::int AS distinct_tracks,
         count(DISTINCT album_key) FILTER (WHERE album_key IS NOT NULL)::int AS distinct_albums
@@ -390,6 +392,7 @@ async function loadDetailPeriodFeatures(
     SELECT
       totals.lifetime_plays,
       period_stats.period_plays,
+      period_stats.period_events,
       period_stats.active_days,
       period_stats.distinct_tracks,
       period_stats.distinct_albums,
@@ -502,7 +505,7 @@ async function loadDetailPeriodFeatures(
     averagePerTrack: roundAverage(periodPlays, Number(row.distinct_tracks)),
     averagePerActiveDay: roundAverage(periodPlays, Number(row.active_days)),
     topItem,
-    topItemShare: topItem && periodPlays ? Math.round((topItem.plays / periodPlays) * 1_000) / 10 : null,
+    topItemShare: topItem && row.period_events ? Math.round((topItem.plays / row.period_events) * 1_000) / 10 : null,
     peak,
     chart: fillChart(row.chart ?? [], chartMode, row.period_start, row.period_end),
     chartMode,

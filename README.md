@@ -232,6 +232,9 @@ and skipped plays at export timestamps. Raw records stay untouched.
 `ranking=wrapped` is date-range context only, not a different metric. Live views
 avoid duplicating materialized storage and independently stale snapshots.
 Analytics reads are uncached; only recommendation catalogue data is cached.
+Track and album lists group by Spotify ID when available, so renamed titles do
+not split the total shown on the linked detail page. Song counts always count
+each eligible event once, including on artist pages and in artist filters.
 
 The 1 January–12 November window is an estimate of Spotify's published
 "mid-November" cutoff. Taste Profile exclusions and historical billing roles are

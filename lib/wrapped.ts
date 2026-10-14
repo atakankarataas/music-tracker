@@ -1,7 +1,7 @@
 import "server-only";
 import { sql } from "@/lib/db";
 import type { EntityItem, ChartPoint } from "@/lib/data";
-import { wrappedEligibility, wrappedCreditWeight } from "@/lib/wrapped-policy";
+import { wrappedEligibility } from "@/lib/wrapped-policy";
 
 export type WrappedData = {
   archiveFirstPlay: string | null;
@@ -29,19 +29,15 @@ export async function loadWrappedData(start: string, end: string): Promise<Wrapp
         AND played_at < (${end}::date + 1)::timestamp AT TIME ZONE 'Europe/Istanbul'
         ${wrappedEligibility()}
     ), track_plays AS MATERIALIZED (
-      SELECT spotify_id, artist_name, track_name, count(*)::int AS n, max(image_url) AS image_url
-      FROM plays GROUP BY spotify_id, artist_name, track_name
-    ), credits AS (
-      SELECT c.spotify_id, c.artist_id, max(c.artist_name) AS artist_name, min(c.position) AS position
-      FROM public.music_track_artists c
-      WHERE c.spotify_id IN (SELECT spotify_id FROM track_plays)
-      GROUP BY c.spotify_id, c.artist_id
+      SELECT max(spotify_id) AS spotify_id, max(artist_name) AS artist_name, max(track_name) AS track_name, count(*)::int AS n, max(image_url) AS image_url
+      FROM plays GROUP BY coalesce(spotify_id,md5(track_name||chr(31)||artist_name))
     ), artists AS MATERIALIZED (
-      SELECT coalesce(c.artist_name,p.artist_name) AS name,
-        sum(p.n * ${wrappedCreditWeight()})::double precision AS plays,
-        max(c.artist_id) AS id, max(p.image_url) AS "imageUrl"
-      FROM track_plays p LEFT JOIN credits c ON c.spotify_id = p.spotify_id
-      GROUP BY coalesce(c.artist_name,p.artist_name)
+      SELECT artist_name AS name, sum(play_weight)::double precision AS plays,
+        max(artist_id) AS id,max(image_url) AS "imageUrl"
+      FROM music_read.artist_plays
+      WHERE played_at >= ${start}::date::timestamp AT TIME ZONE 'Europe/Istanbul'
+        AND played_at < (${end}::date+1)::timestamp AT TIME ZONE 'Europe/Istanbul'
+      GROUP BY artist_name
     ), artist_rank AS (
       SELECT * FROM artists ORDER BY plays DESC, name LIMIT 50
     ), track_rank AS (
@@ -49,10 +45,10 @@ export async function loadWrappedData(start: string, end: string): Promise<Wrapp
         image_url AS "imageUrl", spotify_id AS id
       FROM track_plays ORDER BY n DESC, track_name, artist_name, spotify_id LIMIT 20
     ), album_rank AS (
-      SELECT album_name AS name, artist_name AS secondary, count(*)::int AS plays,
-        max(image_url) AS "imageUrl", album_id AS id
-      FROM plays WHERE album_name IS NOT NULL GROUP BY album_id, album_name, artist_name
-      ORDER BY count(*) DESC, album_name, artist_name, album_id LIMIT 20
+      SELECT max(album_name) AS name, max(artist_name) AS secondary, count(*)::int AS plays,
+        max(image_url) AS "imageUrl", max(album_id) AS id
+      FROM plays WHERE album_name IS NOT NULL GROUP BY coalesce(album_id,md5(album_name||chr(31)||artist_name))
+      ORDER BY plays DESC, name, secondary, id LIMIT 20
     ), days AS MATERIALIZED (
       SELECT local_time::date AS day, count(*)::int AS n FROM plays GROUP BY 1
     ), streaks AS (

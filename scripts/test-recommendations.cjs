@@ -25,8 +25,11 @@ Module._load = (request, ...rest) => {
 };
 const {chooseRecommendations,songKey}=load('lib/recommendation-ranking.ts');
 assert.equal(songKey('Song - 2011 Remaster','Artist'),songKey('Song','Artist'));
-const candidates=Array.from({length:60},(_,i)=>({id:`t${i}`,name:`Song ${i}`,artist:`Artist ${i%10}`,artistId:`a${i%10}`,imageUrl:null,seed:'Seed',familiar:i>=40,score:100-i}));
+assert.equal(songKey('Song - Sped Up','Artist'),songKey('Song','Artist'));
+assert.equal(songKey('Song - Slowed Down','Artist'),songKey('Song','Artist'));
+const candidates=Array.from({length:60},(_,i)=>({id:`t${i}`,name:`Song ${i}`,artist:`Artist ${i%10}`,artistId:`a${i%10}`,imageUrl:null,seed:`Seed ${i%10}`,familiar:i>=40,score:100-i}));
 const picks=chooseRecommendations(candidates);
+assert.equal(new Set(picks.slice(0,4).map(x=>x.seed)).size,4);
 assert.equal(picks.length,20);assert.equal(picks.filter(x=>x.familiar).length,4);
 for(const id of new Set(picks.map(x=>x.artistId))) assert.ok(picks.filter(x=>x.artistId===id).length<=3);
 assert.equal(chooseRecommendations([candidates[0],{...candidates[0],id:'different-edition'}]).length,1);

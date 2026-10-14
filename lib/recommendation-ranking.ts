@@ -6,7 +6,7 @@ export type RecommendationTrack = {
 // Editions with another Spotify ID must not masquerade as an unheard song.
 export function songKey(name: string, artist: string) {
   return `${artist.toLocaleLowerCase("en").trim()}|${name.toLocaleLowerCase("en")
-    .replace(/\s*[-–(]\s*(?:\d{4}\s*)?(?:remaster(?:ed)?|deluxe|bonus|anniversary|explicit|clean).*$/i, "")
+    .replace(/\s*[-–(]\s*(?:\d{4}\s*)?(?:remaster(?:ed)?|deluxe|bonus|anniversary|explicit|clean|sped[ -]*up|slowed(?:[ -]*down)?|nightcore).*$/i, "")
     .replace(/\s+/g, " ").trim()}`;
 }
 
@@ -30,8 +30,17 @@ export function chooseRecommendations(candidates: RecommendationTrack[], limit =
   add(true, selected.length ? Math.min(Math.floor(limit * .2), Math.floor(selected.length / 4)) : Math.floor(limit * .2));
   add(false, limit - selected.length);
   // Spread artists and tuck familiar tracks between discoveries.
+  const buckets = new Map<string, RecommendationTrack[]>();
+  for (const track of selected.filter(t => !t.familiar)) {
+    const bucket = buckets.get(track.seed) ?? [];
+    bucket.push(track); buckets.set(track.seed, bucket);
+  }
+  const discoveries: RecommendationTrack[] = [];
+  while ([...buckets.values()].some(b => b.length)) {
+    for (const bucket of buckets.values()) if (bucket.length) discoveries.push(bucket.shift()!);
+  }
   const positions = new Map<RecommendationTrack, number>();
-  let fresh = 0, familiar = 0;
-  for (const track of selected) positions.set(track, track.familiar ? 3.5 + familiar++ * 5 : fresh++);
+  discoveries.forEach((track, i) => positions.set(track, i));
+  selected.filter(t => t.familiar).forEach((track, i) => positions.set(track, 3.5 + i * 5));
   return selected.sort((a, b) => positions.get(a)! - positions.get(b)!);
 }

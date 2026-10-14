@@ -698,6 +698,7 @@ type RelatedRow = {
     imageUrl: string | null;
     id: string | null;
   }>;
+  event_count: string;
 };
 
 // The home page and the library must agree on what "30 days" means, so the
@@ -924,8 +925,7 @@ async function getLibraryPage(
       ? sql`title ASC, subtitle ASC NULLS LAST`
       : sort === "recent_desc"
         ? sql`last_play DESC, title ASC`
-        : wrapped ? sql`play_count DESC, title ASC, subtitle ASC NULLS LAST, entity_id ASC NULLS LAST`
-          : sql`play_count DESC, title ASC`;
+        : sql`play_count DESC, title ASC, subtitle ASC NULLS LAST, entity_id ASC NULLS LAST`;
 
   if (mode === "artists") {
     const artistFilter = !filter ? sql`` : filter.type === "artist"
@@ -994,16 +994,16 @@ async function getLibraryPage(
       : await sql<LibraryPageRow[]>`
           WITH grouped AS (
             SELECT
-              album_name AS title,
-              artist_name AS subtitle,
-              sum(play_weight)::double precision AS play_count,
+              max(album_name) AS title,
+              max(artist_name) AS subtitle,
+              count(*)::int AS play_count,
               max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
               max(album_id) FILTER (WHERE album_id IS NOT NULL) AS entity_id,
               max(album_id) FILTER (WHERE album_id IS NOT NULL) AS album_id,
               max(played_at) AS last_play
             FROM ${filter?.type === "artist" ? sql`music_read.artist_plays` : sql`music_read.scrobbles`} scrobbles
             WHERE album_name IS NOT NULL ${datePredicate} ${filterPredicate} ${searchPredicate}
-            GROUP BY album_id, album_name, artist_name
+            GROUP BY coalesce(album_id,md5(album_name||chr(31)||artist_name))
           ),
           ranked AS (
             SELECT *,
@@ -1056,16 +1056,16 @@ async function getLibraryPage(
     : await sql<LibraryPageRow[]>`
         WITH grouped AS (
           SELECT
-            track_name AS title,
-            artist_name AS subtitle,
-            sum(play_weight)::double precision AS play_count,
+            max(track_name) AS title,
+            max(artist_name) AS subtitle,
+            count(*)::int AS play_count,
             max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
             max(spotify_id) FILTER (WHERE spotify_id IS NOT NULL) AS entity_id,
             max(album_id) FILTER (WHERE album_id IS NOT NULL) AS album_id,
             max(played_at) AS last_play
           FROM ${filter?.type === "artist" ? sql`music_read.artist_plays` : sql`music_read.scrobbles`} scrobbles
           WHERE true ${datePredicate} ${filterPredicate} ${searchPredicate}
-          GROUP BY spotify_id, track_name, artist_name
+          GROUP BY coalesce(spotify_id,md5(track_name||chr(31)||artist_name))
         ),
         ranked AS (
           SELECT *,
@@ -1221,7 +1221,7 @@ async function getLibraryRelated(
     album_groups AS (
       SELECT
         max(album_name) AS title,
-        sum(play_weight)::double precision AS count,
+        count(*)::int AS count,
         max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
         max(album_id) FILTER (WHERE album_id IS NOT NULL) AS entity_id
       FROM filtered
@@ -1233,7 +1233,7 @@ async function getLibraryRelated(
     track_groups AS (
       SELECT
         max(track_name) AS title,
-        sum(play_weight)::double precision AS count,
+        count(*)::int AS count,
         max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
         max(spotify_id) FILTER (WHERE spotify_id IS NOT NULL) AS entity_id
       FROM filtered
@@ -1243,6 +1243,7 @@ async function getLibraryRelated(
     )
     SELECT
       sum(play_weight)::text AS count,
+      count(*)::text AS event_count,
       max(image_url) FILTER (WHERE image_url IS NOT NULL) AS image_url,
       max(artist_name) AS artist_name,
       count(DISTINCT track_name)::text AS track_count,
@@ -1283,7 +1284,7 @@ async function getLibraryRelated(
       imageUrl: album.imageUrl,
       id: album.id,
       href: albumHref(album.title, album.id),
-      percent: total === 0 ? 0 : (Number(album.count) / total) * 100,
+      percent: Number(row.event_count) === 0 ? 0 : (Number(album.count) / Number(row.event_count)) * 100,
     })),
     relatedTracks: tracks.map((track, index) => ({
       rank: index + 1,

@@ -62,6 +62,11 @@ Module._load = (request, ...rest) => {
       const artist = recap.topArtists[0];
       const filtered = await getLegacyLibraryData({mode:'tracks',period:'custom',start,end,filter:{type:'artist',value:artist.name}});
       assert.equal(filtered.header.count,artist.plays);
+      const songs=await getLegacyLibraryData({mode:'tracks',period:'custom',start,end,pageSize:100});
+      for(const item of filtered.items) {
+        const song=songs.items.find(x=>x.id===item.id);
+        if(song) assert.equal(item.count,song.count,`${year}: song counts must count a listen once even in artist filters`);
+      }
       assert.ok(Math.abs(filtered.chart.reduce((sum,x)=>sum+x.value,0)-artist.plays)<.00001);
       console.log(`${year}: Overview, Wrapped, Library, artist filter and chart agree${references[year] ? '; reference top five matches' : ''}`);
     }

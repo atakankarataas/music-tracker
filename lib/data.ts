@@ -160,9 +160,9 @@ export async function getArtistDetail(name: string): Promise<DetailData | null> 
       entity.plays::text AS total_plays,entity.first_play::text,entity.last_play::text,
       (SELECT count(DISTINCT (played_at AT TIME ZONE 'Europe/Istanbul')::date)::text FROM filtered) AS active_days,
       coalesce((SELECT json_agg(item ORDER BY item.plays DESC,item.name) FROM (
-        SELECT track_name AS name, max(artist_name) AS secondary,sum(play_weight)::double precision AS plays,
-          max(image_url) AS "imageUrl",spotify_id AS id FROM filtered
-        GROUP BY spotify_id,track_name ORDER BY plays DESC,name LIMIT 10
+        SELECT max(track_name) AS name, max(artist_name) AS secondary,count(*)::int AS plays,
+          max(image_url) AS "imageUrl",max(spotify_id) AS id FROM filtered
+        GROUP BY coalesce(spotify_id,md5(track_name||chr(31)||artist_name)) ORDER BY plays DESC,name LIMIT 10
       ) item),'[]'::json) AS top_items,
       coalesce((SELECT json_agg(item ORDER BY item."playedAt" DESC) FROM (
         SELECT track_name AS "trackName",artist_name AS "artistName",played_at::text AS "playedAt",

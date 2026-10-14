@@ -38,6 +38,10 @@ Module._load = (request, ...rest) => {
   const features=await getDetailPageFeatures("artist",artist,false,"all");
   assert.equal(features.lifetimePlays,expected.plays);
   assert.equal(features.periodPlays,expected.plays);
+  const track=features.topTracks[0];
+  const [trackCount]=await sql`SELECT count(*)::int AS n FROM music_read.scrobbles WHERE spotify_id=${track.id}`;
+  assert.equal(track.plays,trackCount.n);
+  assert.ok(features.topItemShare<=100);
   const search=await searchEntities(artist);
   assert.equal(search.artists.find(x=>x.name===artist).plays,expected.plays);
   const legacy=await getEntityLegacyFeatures('artist',artist);

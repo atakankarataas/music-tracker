@@ -128,22 +128,22 @@ async function loadHomePeriodData(
       FROM artist_credits GROUP BY name ORDER BY sum(credit_weight) DESC,name LIMIT 5
     ),
     album_rank AS (
-      SELECT album_name AS name, artist_name AS secondary, count(*)::int AS plays,
+      SELECT max(album_name) AS name, max(artist_name) AS secondary, count(*)::int AS plays,
         max(image_url) FILTER (WHERE image_url IS NOT NULL) AS "imageUrl",
         max(album_id) FILTER (WHERE album_id IS NOT NULL) AS id
       FROM filtered
       WHERE album_name IS NOT NULL
-      GROUP BY album_id, album_name, artist_name
-      ORDER BY count(*) DESC, album_name
+      GROUP BY coalesce(album_id,md5(album_name||chr(31)||artist_name))
+      ORDER BY plays DESC, name, secondary, id
       LIMIT 20
     ),
     track_rank AS (
-      SELECT track_name AS name, artist_name AS secondary, count(*)::int AS plays,
+      SELECT max(track_name) AS name, max(artist_name) AS secondary, count(*)::int AS plays,
         max(image_url) FILTER (WHERE image_url IS NOT NULL) AS "imageUrl",
         max(spotify_id) FILTER (WHERE spotify_id IS NOT NULL) AS id
       FROM filtered
-      GROUP BY spotify_id, track_name, artist_name
-      ORDER BY count(*) DESC, track_name
+      GROUP BY coalesce(spotify_id,md5(track_name||chr(31)||artist_name))
+      ORDER BY plays DESC, name, secondary, id
       LIMIT 20
     ),
     activity_counts AS (
