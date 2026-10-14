@@ -364,7 +364,7 @@ export function LibraryExplorer({ data, state }: { data: LibraryViewData; state:
           <SlidersHorizontal aria-hidden="true" size={15} />
           <span className="sr-only">Sort library</span>
           <select value={state.sort} onChange={(event) => navigate({ sort: event.target.value as LibrarySort, page: 1 })}>
-            {SORTS.map((sort) => <option key={sort.value} value={sort.value}>{state.wrapped && state.mode === "artists" && sort.value === "plays_desc" ? "Spotify weighting (estimate)" : state.wrapped && state.mode === "artists" && sort.value === "plays_asc" ? "Spotify weighting (ascending)" : sort.label}</option>)}
+            {SORTS.map((sort) => <option key={sort.value} value={sort.value}>{sort.label}</option>)}
           </select>
         </label>
 
